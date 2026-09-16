@@ -60,9 +60,8 @@ end
 local function scanCharacter()
     local bags = {}
 
-    addContainerItems(BACKPACK_CONTAINER or 0, bags)
-    local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5
-    for bagID = 1, lastBag do
+    addContainerItems(0, bags)
+    for bagID = 1, 5 do
         addContainerItems(bagID, bags)
     end
 
@@ -70,13 +69,11 @@ local function scanCharacter()
     character.bags = bags
     if isBankOpen then
         local bank = {}
-        addContainerItems(BANK_CONTAINER, bank)
-        local firstBankBag = NUM_BAG_SLOTS + 1
-        local lastBankBag = NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7)
-        for bagID = firstBankBag, lastBankBag do
+        addContainerItems(-2, bank)
+        for bagID = 6, 11 do
             addContainerItems(bagID, bank)
         end
-        addContainerItems(REAGENTBANK_CONTAINER, bank)
+        addContainerItems(5, bank)
         character.bank = bank
     end
 
@@ -85,9 +82,7 @@ end
 
 local function scanWarbandBank()
     local warbandBank = {}
-    for containerID = 12, 16 do
-        addContainerItems(containerID, warbandBank)
-    end
+    addContainerItems(-3, warbandBank)
     database.warbandBank = warbandBank
 end
 
