@@ -22,14 +22,14 @@ Use `/rth rescan` to manually rescan the current character, or `/rth reset` to c
 
 ## Releases
 
-Pushing to `main` automatically reads the version from `RevathsTooltipHelper.toc`, creates a matching `vX.Y.Z` tag, and runs the GitHub Actions release workflow. It packages the addon with `RevathsTooltipHelper` as the ZIP's top-level folder, uploads the ZIP as a workflow artifact, and attaches it to a generated GitHub Release.
+Pushing to `main` automatically increments the patch version in `RevathsTooltipHelper.toc`, commits the version bump, creates a matching `vX.Y.Z` tag, and publishes the GitHub Release. It packages the addon with `RevathsTooltipHelper` as the ZIP's top-level folder, uploads the ZIP as a workflow artifact, and attaches it to the release.
 
 To publish a release:
 
 ```text
-git add RevathsTooltipHelper.toc
-git commit -m "Prepare v1.0.0 release"
+git add RevathsTooltipHelper.lua
+git commit -m "Update addon"
 git push origin main
 ```
 
-The workflow can also be started manually from the GitHub Actions tab by providing a release tag. Existing `v*` tags pushed manually are supported too.
+The workflow can also be started manually from the GitHub Actions tab. Every successful run increments the patch version and publishes the next release.
