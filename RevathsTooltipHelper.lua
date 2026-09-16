@@ -14,6 +14,13 @@ local function getItemID(itemLinkOrID)
         return itemLinkOrID
     end
 
+    local function isAccountBound(bindType)
+        local itemBind = Enum and Enum.ItemBind
+        return bindType == (itemBind and itemBind.ToWoWAccount or 7)
+            or bindType == (itemBind and itemBind.ToBnetAccount or 8)
+            or bindType == (itemBind and itemBind.ToBnetAccountUntilEquipped or 9)
+    end
+
     if type(itemLinkOrID) == "string" then
         return C_Item.GetItemInfoInstant(itemLinkOrID)
     end
@@ -27,8 +34,10 @@ local function addContainerItems(containerID, counts)
         if itemInfo then
             local itemID = getItemID(itemInfo.itemID or itemInfo.hyperlink)
             local itemLocation = ItemLocation:CreateFromBagAndSlot(containerID, slot)
-            local isSoulbound = itemLocation:IsValid() and C_Item.IsBound(itemLocation)
-            if itemID and not isSoulbound then
+            local _, itemLink, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemInfo.hyperlink or itemID)
+            local isBound = itemLocation:IsValid() and C_Item.IsBound(itemLocation)
+            local isCharacterBound = isBound and not isAccountBound(bindType)
+            if itemID and not isCharacterBound then
                 counts[itemID] = (counts[itemID] or 0) + (itemInfo.stackCount or 1)
             end
         end

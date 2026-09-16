@@ -14,7 +14,7 @@ The folder must contain `RevathsTooltipHelper.toc` directly.
 
 ## How it works
 
-The addon scans the current character's bags at login and after bag changes. When the bank is opened, it also scans the bank, bank bags, and reagent bank. Counts are saved per character in `RevathsTooltipHelperDB` and summed in item tooltips. Soulbound items are excluded because they cannot be shared between characters.
+The addon scans the current character's bags at login and after bag changes. When the bank is opened, it also scans the bank, bank bags, and reagent bank. Counts are saved per character in `RevathsTooltipHelperDB` and summed in item tooltips. Soulbound items are excluded because they cannot be shared between characters, while Warbound/account-bound items are included.
 
 Offline characters are represented by their last saved scan, so log into each character once and open its bank to build a complete total.
 
