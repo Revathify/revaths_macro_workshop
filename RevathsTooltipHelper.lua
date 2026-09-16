@@ -69,18 +69,22 @@ end
 local function getTotal(itemID)
     local total = 0
     local currentCount = 0
+    local characterCounts = {}
 
     for characterKey, counts in pairs(database.characters) do
         local characterBags = counts.bags or {}
         local characterBank = counts.bank or {}
         local count = (characterBags[itemID] or 0) + (characterBank[itemID] or 0)
         total = total + count
+        if count > 0 then
+            characterCounts[characterKey] = count
+        end
         if characterKey == currentCharacterKey then
             currentCount = count
         end
     end
 
-    return total, currentCount
+    return total, currentCount, characterCounts
 end
 
 local function addTooltipCount(tooltip, data)
@@ -97,18 +101,29 @@ local function addTooltipCount(tooltip, data)
         return
     end
 
-    local total, currentCount = getTotal(itemID)
+    local total, currentCount, characterCounts = getTotal(itemID)
     if total == 0 then
         return
     end
 
-    tooltip:AddDoubleLine(
-        "Revath's Tooltip Helper",
-        string.format("%d total", total),
-        0.45, 0.8, 1,
-        1, 1, 1
-    )
-    tooltip:AddLine(string.format("This character: %d", currentCount), 0.75, 0.75, 0.75)
+    tooltip:AddLine(string.format("RTH: Total: %d", total), 0.45, 0.8, 1)
+    if IsShiftKeyDown() then
+        tooltip:AddLine(string.format("This character: %d", currentCount), 0.75, 0.75, 0.75)
+
+        local otherCharacters = {}
+        for characterKey, count in pairs(characterCounts) do
+            if characterKey ~= currentCharacterKey then
+                otherCharacters[#otherCharacters + 1] = { name = characterKey, count = count }
+            end
+        end
+        table.sort(otherCharacters, function(left, right)
+            return left.name < right.name
+        end)
+
+        for _, character in ipairs(otherCharacters) do
+            tooltip:AddLine(string.format("%s: %d", character.name, character.count), 0.75, 0.75, 0.75)
+        end
+    end
     tooltip.rthAddedItemID = itemID
     tooltip:Show()
 end
