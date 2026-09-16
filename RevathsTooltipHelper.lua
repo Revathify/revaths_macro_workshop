@@ -46,7 +46,8 @@ local function scanCharacter()
     local bags = {}
 
     addContainerItems(BACKPACK_CONTAINER, bags)
-    for bagID = 1, NUM_BAG_SLOTS do
+    local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or (NUM_BAG_SLOTS + 1)
+    for bagID = 1, lastBag do
         addContainerItems(bagID, bags)
     end
 
