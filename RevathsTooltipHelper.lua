@@ -14,16 +14,16 @@ local function getItemID(itemLinkOrID)
         return itemLinkOrID
     end
 
-    local function isAccountBound(bindType)
-        local itemBind = Enum and Enum.ItemBind
-        return bindType == (itemBind and itemBind.ToWoWAccount or 7)
-            or bindType == (itemBind and itemBind.ToBnetAccount or 8)
-            or bindType == (itemBind and itemBind.ToBnetAccountUntilEquipped or 9)
-    end
-
     if type(itemLinkOrID) == "string" then
         return C_Item.GetItemInfoInstant(itemLinkOrID)
     end
+end
+
+local function isAccountBound(bindType)
+    local itemBind = Enum and Enum.ItemBind
+    return bindType == (itemBind and itemBind.ToWoWAccount or 7)
+        or bindType == (itemBind and itemBind.ToBnetAccount or 8)
+        or bindType == (itemBind and itemBind.ToBnetAccountUntilEquipped or 9)
 end
 
 local function addContainerItems(containerID, counts)
