@@ -33,10 +33,8 @@ local function addContainerItems(containerID, counts)
         local itemInfo = C_Container.GetContainerItemInfo(containerID, slot)
         if itemInfo then
             local itemID = getItemID(itemInfo.itemID or itemInfo.hyperlink)
-            local itemLocation = ItemLocation:CreateFromBagAndSlot(containerID, slot)
-            local _, itemLink, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemInfo.hyperlink or itemID)
-            local isBound = itemLocation:IsValid() and C_Item.IsBound(itemLocation)
-            local isCharacterBound = isBound and not isAccountBound(bindType)
+            local _, _, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemInfo.hyperlink or itemID)
+            local isCharacterBound = itemInfo.isBound and bindType and not isAccountBound(bindType)
             if itemID and not isCharacterBound then
                 counts[itemID] = (counts[itemID] or 0) + (itemInfo.stackCount or 1)
             end
