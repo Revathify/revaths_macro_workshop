@@ -106,7 +106,7 @@ local function addTooltipCount(tooltip, data)
         return
     end
 
-    tooltip:AddLine(string.format("RTH: Total: %d", total), 0.45, 0.8, 1)
+    tooltip:AddLine(string.format("RTH Total: %d", total), 0.45, 0.8, 1)
     if IsShiftKeyDown() then
         tooltip:AddLine(string.format("This character: %d", currentCount), 0.75, 0.75, 0.75)
 
