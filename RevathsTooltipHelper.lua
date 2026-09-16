@@ -40,6 +40,10 @@ local function isSoulboundItem(containerID, slot)
 end
 
 local function addContainerItems(containerID, counts)
+    if type(containerID) ~= "number" then
+        return
+    end
+
     local slotCount = C_Container.GetContainerNumSlots(containerID) or 0
 
     for slot = 1, slotCount do
@@ -56,8 +60,8 @@ end
 local function scanCharacter()
     local bags = {}
 
-    addContainerItems(BACKPACK_CONTAINER, bags)
-    local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or (NUM_BAG_SLOTS + 1)
+    addContainerItems(BACKPACK_CONTAINER or 0, bags)
+    local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or 5
     for bagID = 1, lastBag do
         addContainerItems(bagID, bags)
     end
@@ -67,7 +71,9 @@ local function scanCharacter()
     if isBankOpen then
         local bank = {}
         addContainerItems(BANK_CONTAINER, bank)
-        for bagID = NUM_BAG_SLOTS + 1, NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do
+        local firstBankBag = NUM_BAG_SLOTS + 1
+        local lastBankBag = NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7)
+        for bagID = firstBankBag, lastBankBag do
             addContainerItems(bagID, bank)
         end
         addContainerItems(REAGENTBANK_CONTAINER, bank)
