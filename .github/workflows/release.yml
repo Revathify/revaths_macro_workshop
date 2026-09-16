@@ -71,7 +71,7 @@ jobs:
   release:
     name: Build release ZIP
     needs: prepare
-    if: needs.prepare.outputs.should_release == 'true'
+    if: needs.prepare.outputs.should_release == 'true' && (github.event_name != 'push' || github.ref_type == 'tag')
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
