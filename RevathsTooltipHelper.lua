@@ -129,7 +129,12 @@ eventFrame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
         database = RevathsTooltipHelperDB or { characters = {} }
-        database.characters = database.characters or {}
+        if database.version ~= 2 then
+            database.version = 2
+            database.characters = {}
+        else
+            database.characters = database.characters or {}
+        end
         RevathsTooltipHelperDB = database
         currentCharacterKey = getCharacterKey()
         rescan()
@@ -160,7 +165,11 @@ end)
 SLASH_REVATHSTOOLTIPHELPER1 = "/rth"
 SlashCmdList.REVATHSTOOLTIPHELPER = function(message)
     local command = string.lower(message or "")
-    if command == "rescan" or command == "" then
+    if command == "reset" then
+        database.characters = {}
+        rescan()
+        print("Revath's Tooltip Helper: all saved character totals were cleared; current character rescanned.")
+    elseif command == "rescan" or command == "" then
         rescan()
         print("Revath's Tooltip Helper: character inventory rescanned.")
     else
