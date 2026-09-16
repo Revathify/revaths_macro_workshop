@@ -26,7 +26,9 @@ local function addContainerItems(containerID, counts)
         local itemInfo = C_Container.GetContainerItemInfo(containerID, slot)
         if itemInfo then
             local itemID = getItemID(itemInfo.itemID or itemInfo.hyperlink)
-            if itemID then
+            local itemLocation = ItemLocation:CreateFromBagAndSlot(containerID, slot)
+            local isSoulbound = itemLocation:IsValid() and C_Item.IsBound(itemLocation)
+            if itemID and not isSoulbound then
                 counts[itemID] = (counts[itemID] or 0) + (itemInfo.stackCount or 1)
             end
         end
