@@ -19,11 +19,24 @@ local function getItemID(itemLinkOrID)
     end
 end
 
-local function isAccountBound(bindType)
-    local itemBind = Enum and Enum.ItemBind
-    return bindType == (itemBind and itemBind.ToWoWAccount or 7)
-        or bindType == (itemBind and itemBind.ToBnetAccount or 8)
-        or bindType == (itemBind and itemBind.ToBnetAccountUntilEquipped or 9)
+local function isSoulboundItem(containerID, slot)
+    if not C_TooltipInfo or not C_TooltipInfo.GetBagItem then
+        return false
+    end
+
+    local tooltipData = C_TooltipInfo.GetBagItem(containerID, slot)
+    for _, line in ipairs(tooltipData and tooltipData.lines or {}) do
+        local text = line.leftText
+        if text then
+            local normalizedText = string.lower(text)
+            local soulboundText = string.lower(ITEM_SOULBOUND or "Soulbound")
+            if string.find(normalizedText, soulboundText, 1, true) then
+                return true
+            end
+        end
+    end
+
+    return false
 end
 
 local function addContainerItems(containerID, counts)
@@ -33,9 +46,7 @@ local function addContainerItems(containerID, counts)
         local itemInfo = C_Container.GetContainerItemInfo(containerID, slot)
         if itemInfo then
             local itemID = getItemID(itemInfo.itemID or itemInfo.hyperlink)
-            local _, _, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemInfo.hyperlink or itemID)
-            local isCharacterBound = itemInfo.isBound and bindType and not isAccountBound(bindType)
-            if itemID and not isCharacterBound then
+            if itemID and not isSoulboundItem(containerID, slot) then
                 counts[itemID] = (counts[itemID] or 0) + (itemInfo.stackCount or 1)
             end
         end
