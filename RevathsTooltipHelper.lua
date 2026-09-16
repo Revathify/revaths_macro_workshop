@@ -167,8 +167,6 @@ eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 eventFrame:RegisterEvent("BANKFRAME_OPENED")
 eventFrame:RegisterEvent("BANKFRAME_CLOSED")
 eventFrame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
-eventFrame:RegisterEvent("ACCOUNT_BANKFRAME_OPENED")
-eventFrame:RegisterEvent("ACCOUNT_BANKFRAME_CLOSED")
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
         database = RevathsTooltipHelperDB or { characters = {} }
@@ -181,10 +179,10 @@ eventFrame:SetScript("OnEvent", function(_, event)
         RevathsTooltipHelperDB = database
         currentCharacterKey = getCharacterKey()
         rescan()
-    elseif event == "BANKFRAME_OPENED" or event == "ACCOUNT_BANKFRAME_OPENED" then
+    elseif event == "BANKFRAME_OPENED" then
         isBankOpen = true
         rescan()
-    elseif event == "BANKFRAME_CLOSED" or event == "ACCOUNT_BANKFRAME_CLOSED" then
+    elseif event == "BANKFRAME_CLOSED" then
         isBankOpen = false
     else
         rescan()
