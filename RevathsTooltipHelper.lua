@@ -9,12 +9,14 @@ local function getCharacterKey()
     return realm .. " - " .. name
 end
 
-local function getItemID(itemLink)
-    if not itemLink then
-        return nil
+local function getItemID(itemLinkOrID)
+    if type(itemLinkOrID) == "number" then
+        return itemLinkOrID
     end
 
-    return C_Item.GetItemInfoInstant(itemLink)
+    if type(itemLinkOrID) == "string" then
+        return C_Item.GetItemInfoInstant(itemLinkOrID)
+    end
 end
 
 local function addContainerItems(containerID, counts)
@@ -22,8 +24,8 @@ local function addContainerItems(containerID, counts)
 
     for slot = 1, slotCount do
         local itemInfo = C_Container.GetContainerItemInfo(containerID, slot)
-        if itemInfo and itemInfo.hyperlink then
-            local itemID = getItemID(itemInfo.hyperlink)
+        if itemInfo then
+            local itemID = getItemID(itemInfo.itemID or itemInfo.hyperlink)
             if itemID then
                 counts[itemID] = (counts[itemID] or 0) + (itemInfo.stackCount or 1)
             end
@@ -71,9 +73,16 @@ local function getTotal(itemID)
     return total, currentCount
 end
 
-local function addTooltipCount(tooltip)
-    local _, itemLink = tooltip:GetItem()
-    local itemID = getItemID(itemLink)
+local function addTooltipCount(tooltip, data)
+    if tooltip.rthAddedItemID then
+        return
+    end
+
+    local itemID = data and getItemID(data.id)
+    if not itemID then
+        local _, itemLink = tooltip:GetItem()
+        itemID = getItemID(itemLink)
+    end
     if not itemID or not database or not database.characters then
         return
     end
@@ -90,6 +99,7 @@ local function addTooltipCount(tooltip)
         1, 1, 1
     )
     tooltip:AddLine(string.format("This character: %d", currentCount), 0.75, 0.75, 0.75)
+    tooltip.rthAddedItemID = itemID
     tooltip:Show()
 end
 
@@ -122,8 +132,19 @@ eventFrame:SetScript("OnEvent", function(_, event)
     end
 end)
 
-GameTooltip:HookScript("OnTooltipSetItem", addTooltipCount)
-ItemRefTooltip:HookScript("OnTooltipSetItem", addTooltipCount)
+if TooltipDataProcessor and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, addTooltipCount)
+else
+    GameTooltip:HookScript("OnTooltipSetItem", addTooltipCount)
+    ItemRefTooltip:HookScript("OnTooltipSetItem", addTooltipCount)
+end
+
+GameTooltip:HookScript("OnTooltipCleared", function(tooltip)
+    tooltip.rthAddedItemID = nil
+end)
+ItemRefTooltip:HookScript("OnTooltipCleared", function(tooltip)
+    tooltip.rthAddedItemID = nil
+end)
 
 SLASH_REVATHSTOOLTIPHELPER1 = "/rth"
 SlashCmdList.REVATHSTOOLTIPHELPER = function(message)
