@@ -1,0 +1,8 @@
+## Interface: 120100
+## Title: Revath's Tooltip Helper
+## Notes: Shows item totals across characters you have logged into.
+## Author: Revath
+## Version: 1.0.0
+## SavedVariables: RevathsTooltipHelperDB
+
+RevathsTooltipHelper.lua

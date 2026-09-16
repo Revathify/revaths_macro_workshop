@@ -1,0 +1,123 @@
+name: Package and release addon
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v1.0.0"
+        required: true
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare release tag
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+      should_release: ${{ steps.tag.outputs.should_release }}
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create version tag when needed
+        id: tag
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:EVENT_NAME -eq "push" -and "${{ github.ref_type }}" -eq "tag") {
+            $releaseTag = "${{ github.ref_name }}"
+            "release_tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "should_release=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+
+          if ($env:EVENT_NAME -eq "workflow_dispatch") {
+            $releaseTag = $env:INPUT_TAG
+          } else {
+            $toc = Get-Content -Raw "RevathsTooltipHelper.toc"
+            $versionMatch = [regex]::Match($toc, '(?m)^## Version:\s*(\S+)\s*$')
+            if (-not $versionMatch.Success) {
+              throw "Could not find ## Version in RevathsTooltipHelper.toc"
+            }
+            $releaseTag = "v$($versionMatch.Groups[1].Value)"
+          }
+
+          $tagExists = git ls-remote --exit-code origin "refs/tags/$releaseTag" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            "release_tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "should_release=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+
+          git tag $releaseTag
+          git push origin $releaseTag
+          "release_tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "should_release=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+  release:
+    name: Build release ZIP
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Package addon
+        id: package
+        shell: pwsh
+        run: |
+          $staging = Join-Path $env:RUNNER_TEMP "revaths-tooltip-helper-release"
+          $addonTarget = Join-Path $staging "RevathsTooltipHelper"
+          $zipName = "RevathsTooltipHelper-$env:RELEASE_TAG.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP $zipName
+
+          New-Item -ItemType Directory -Path $addonTarget -Force | Out-Null
+          Copy-Item -LiteralPath @(
+            "RevathsTooltipHelper.toc",
+            "RevathsTooltipHelper.lua"
+          ) -Destination $addonTarget
+          Compress-Archive -LiteralPath $addonTarget -DestinationPath $zipPath -CompressionLevel Optimal
+
+          "zip_name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "zip_path=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.zip_name }}
+          path: ${{ steps.package.outputs.zip_path }}
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ZIP_PATH: ${{ steps.package.outputs.zip_path }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ZIP_PATH" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "$ZIP_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Revath's Tooltip Helper $RELEASE_TAG" \
+              --generate-notes
+          fi
