@@ -82,7 +82,22 @@ end
 
 local function scanWarbandBank()
     local warbandBank = {}
-    addContainerItems(-3, warbandBank)
+    local accountBankTabs
+    if C_Bank and C_Bank.FetchPurchasedBankTabIDs then
+        local accountBankType = Enum and Enum.BankType and Enum.BankType.Account or 2
+        accountBankTabs = C_Bank.FetchPurchasedBankTabIDs(accountBankType)
+    end
+
+    if accountBankTabs then
+        for _, containerID in ipairs(accountBankTabs) do
+            addContainerItems(containerID, warbandBank)
+        end
+    else
+        for containerID = 12, 16 do
+            addContainerItems(containerID, warbandBank)
+        end
+    end
+
     database.warbandBank = warbandBank
 end
 
@@ -168,6 +183,7 @@ eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 eventFrame:RegisterEvent("BANKFRAME_OPENED")
 eventFrame:RegisterEvent("BANKFRAME_CLOSED")
 eventFrame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
+eventFrame:RegisterEvent("PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED")
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
         database = RevathsTooltipHelperDB or { characters = {} }
