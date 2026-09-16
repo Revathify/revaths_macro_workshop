@@ -77,9 +77,18 @@ local function scanCharacter()
     database.characters[currentCharacterKey] = character
 end
 
+local function scanWarbandBank()
+    local warbandBank = {}
+    for containerID = 12, 16 do
+        addContainerItems(containerID, warbandBank)
+    end
+    database.warbandBank = warbandBank
+end
+
 local function getTotal(itemID)
     local total = 0
     local currentCount = 0
+    local warbandCount = (database.warbandBank and database.warbandBank[itemID]) or 0
     local characterCounts = {}
 
     for characterKey, counts in pairs(database.characters) do
@@ -95,7 +104,8 @@ local function getTotal(itemID)
         end
     end
 
-    return total, currentCount, characterCounts
+    total = total + warbandCount
+    return total, currentCount, warbandCount, characterCounts
 end
 
 local function addTooltipCount(tooltip, data)
@@ -112,7 +122,7 @@ local function addTooltipCount(tooltip, data)
         return
     end
 
-    local total, currentCount, characterCounts = getTotal(itemID)
+    local total, currentCount, warbandCount, characterCounts = getTotal(itemID)
     if total == 0 then
         return
     end
@@ -120,6 +130,9 @@ local function addTooltipCount(tooltip, data)
     tooltip:AddLine(string.format("RTH Total: %d", total), 0.45, 0.8, 1)
     if IsShiftKeyDown() then
         tooltip:AddLine(string.format("This character: %d", currentCount), 0.75, 0.75, 0.75)
+        if warbandCount > 0 then
+            tooltip:AddLine(string.format("Warbound Bank: %d", warbandCount), 0.75, 0.75, 0.75)
+        end
 
         local otherCharacters = {}
         for characterKey, count in pairs(characterCounts) do
@@ -142,6 +155,9 @@ end
 local function rescan()
     if database and currentCharacterKey then
         scanCharacter()
+        if isBankOpen then
+            scanWarbandBank()
+        end
     end
 end
 
@@ -151,6 +167,8 @@ eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
 eventFrame:RegisterEvent("BANKFRAME_OPENED")
 eventFrame:RegisterEvent("BANKFRAME_CLOSED")
 eventFrame:RegisterEvent("PLAYERBANKSLOTS_CHANGED")
+eventFrame:RegisterEvent("ACCOUNT_BANKFRAME_OPENED")
+eventFrame:RegisterEvent("ACCOUNT_BANKFRAME_CLOSED")
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
         database = RevathsTooltipHelperDB or { characters = {} }
@@ -163,10 +181,10 @@ eventFrame:SetScript("OnEvent", function(_, event)
         RevathsTooltipHelperDB = database
         currentCharacterKey = getCharacterKey()
         rescan()
-    elseif event == "BANKFRAME_OPENED" then
+    elseif event == "BANKFRAME_OPENED" or event == "ACCOUNT_BANKFRAME_OPENED" then
         isBankOpen = true
         rescan()
-    elseif event == "BANKFRAME_CLOSED" then
+    elseif event == "BANKFRAME_CLOSED" or event == "ACCOUNT_BANKFRAME_CLOSED" then
         isBankOpen = false
     else
         rescan()
