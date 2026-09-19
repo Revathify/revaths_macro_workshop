@@ -1,35 +1,16 @@
-# Revath's Tooltip Helper
+# Revath's Macro Workshop
 
-This World of Warcraft addon adds the total quantity of an item across all characters that have been logged into on the current WoW account.
+A standalone World of Warcraft macro editor with a customizable font, editor font size, macro import, and create/update actions.
 
-## Installation
+## Install
 
-Copy the `revaths_tooltip_helper` folder into:
+Copy the `RevathsMacro` folder into `_retail_/Interface/AddOns/` and reload the UI.
 
-```text
-World of Warcraft\_retail_\Interface\AddOns\
-```
+## Use
 
-The folder must contain `RevathsTooltipHelper.toc` directly.
+- Type `/rmacro` or `/macroworkshop` to open the window.
+- Click an existing macro to import its name, icon, and body.
+- Edit the macro and choose `Create / Update`.
+- Use the font menu and size slider to customize the editor.
 
-## How it works
-
-The addon scans the current character's bags, including the reagent bag, at login and after bag changes. When a bank is opened, it scans the character bank, bank bags, reagent bank, and all purchased Warband Bank tabs using `C_Bank.FetchPurchasedBankTabIDs`. Counts are saved per character in `RevathsTooltipHelperDB`, while Warband Bank counts are saved account-wide and included in item tooltips. Soulbound items are excluded because they cannot be shared between characters, while Warbound/account-bound items are included. Run `/rth rescan` after updating to rebuild the current character's saved counts.
-
-Offline characters are represented by their last saved scan, so log into each character once and open its bank to build a complete total. Version 1.0.5 clears older snapshots once because they may contain soulbound items from previous addon versions.
-
-Use `/rth rescan` to manually rescan the current character, or `/rth reset` to clear all saved snapshots and rescan the current character.
-
-## Releases
-
-Pushing to `main` automatically increments the patch version in `RevathsTooltipHelper.toc`, commits the version bump, creates a matching `vX.Y.Z` tag, and publishes the GitHub Release. It packages the addon with `RevathsTooltipHelper` as the ZIP's top-level folder, uploads the ZIP as a workflow artifact, and attaches it to the release.
-
-To publish a release:
-
-```text
-git add RevathsTooltipHelper.lua
-git commit -m "Update addon"
-git push origin main
-```
-
-The workflow can also be started manually from the GitHub Actions tab. Every successful run increments the patch version and publishes the next release.
+Macro create/update calls use Blizzard's protected macro API and may be refused during combat. Importing and editing remain available.

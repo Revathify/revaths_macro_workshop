@@ -27,15 +27,15 @@ jobs:
         id: version
         shell: bash
         run: |
-          version=$(sed -nE 's/^## Version:[[:space:]]*([0-9]+)\.([0-9]+)\.([0-9]+)[[:space:]]*$/\1 \2 \3/p' RevathsTooltipHelper.toc)
+          version=$(sed -nE 's/^## Version:[[:space:]]*([0-9]+)\.([0-9]+)\.([0-9]+)[[:space:]]*$/\1 \2 \3/p' RevathsMacro.toc)
           if [ -z "$version" ]; then
-            echo "Could not find a semantic version in RevathsTooltipHelper.toc" >&2
+            echo "Could not find a semantic version in RevathsMacro.toc" >&2
             exit 1
           fi
 
           read -r major minor patch <<< "$version"
           next_version="$major.$minor.$((patch + 1))"
-          sed -i -E "s/^## Version:.*/## Version: $next_version/" RevathsTooltipHelper.toc
+          sed -i -E "s/^## Version:.*/## Version: $next_version/" RevathsMacro.toc
           release_tag="v$next_version"
 
           if git ls-remote --exit-code origin "refs/tags/$release_tag" >/dev/null 2>&1; then
@@ -46,7 +46,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add RevathsTooltipHelper.toc
+          git add RevathsMacro.toc
           git commit -m "Bump addon version to $next_version [skip ci]"
           git tag "$release_tag"
           git push origin HEAD:main "$release_tag"
@@ -59,14 +59,14 @@ jobs:
         id: package
         shell: bash
         run: |
-          staging="$RUNNER_TEMP/revaths-tooltip-helper-release"
-          addon_target="$staging/RevathsTooltipHelper"
-          zip_name="RevathsTooltipHelper-${{ steps.version.outputs.release_tag }}.zip"
+          staging="$RUNNER_TEMP/revaths-macro-workshop-release"
+          addon_target="$staging/RevathsMacro"
+          zip_name="RevathsMacro-${{ steps.version.outputs.release_tag }}.zip"
           zip_path="$RUNNER_TEMP/$zip_name"
 
           mkdir -p "$addon_target"
-          cp RevathsTooltipHelper.toc RevathsTooltipHelper.lua "$addon_target/"
-          (cd "$staging" && zip -r "$zip_path" RevathsTooltipHelper)
+          cp RevathsMacro.toc Core.lua UI.lua "$addon_target/"
+          (cd "$staging" && zip -r "$zip_path" RevathsMacro)
 
           echo "zip_name=$zip_name" >> "$GITHUB_OUTPUT"
           echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
@@ -88,5 +88,5 @@ jobs:
         run: |
           gh release create "$RELEASE_TAG" "$ZIP_PATH" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Revath's Tooltip Helper $RELEASE_TAG" \
+            --title "Revath's Macro Workshop $RELEASE_TAG" \
             --generate-notes
