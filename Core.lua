@@ -16,6 +16,7 @@ events:SetScript("OnEvent", function(_, event, loadedName)
         RevathsMacroDB.scale = math.max(0.65, math.min(1.10, tonumber(RevathsMacroDB.scale) or 1))
         RevathsMacroDB.opacity = math.max(0.55, math.min(1, tonumber(RevathsMacroDB.opacity) or 0.96))
         RevathsMacroDB.palette = type(RevathsMacroDB.palette) == "string" and RevathsMacroDB.palette or "midnight"
+        RevathsMacroDB.skin = RevathsMacroDB.skin == "classic" and "classic" or "modern"
         RevathsMacroDB.compactRows = RevathsMacroDB.compactRows == true
         RevathsMacroDB.window = type(RevathsMacroDB.window) == "table" and RevathsMacroDB.window or {}
         ns.db = RevathsMacroDB

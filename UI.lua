@@ -35,10 +35,19 @@ local PALETTES = {
 
 local COLORS = {
     background = { 0.025, 0.032, 0.050, 0.97 }, panel = { 0.055, 0.070, 0.105, 1 },
-    panelAlt = { 0.080, 0.100, 0.145, 1 }, input = { 0.015, 0.022, 0.036, 1 },
+    panelAlt = { 0.080, 0.100, 0.145, 1 }, input = { 0.015, 0.022, 0.036, 1 }, parchment = { 0.015, 0.022, 0.036, 1 },
     border = { 0.18, 0.30, 0.40, 1 }, accent = { 0.20, 0.78, 0.82, 1 },
     accent2 = { 0.40, 0.86, 0.69, 1 }, text = { 0.92, 0.95, 0.98, 1 },
     muted = { 0.57, 0.66, 0.75, 1 }, danger = { 0.95, 0.35, 0.38, 1 },
+    ink = { 0.10, 0.040, 0.012, 1 },
+}
+
+local CLASSIC_COLORS = {
+    background = { 0.030, 0.024, 0.014 }, panel = { 0.040, 0.030, 0.016 },
+    panelAlt = { 0.090, 0.055, 0.022 }, input = { 0.025, 0.018, 0.009 }, parchment = { 0.76, 0.48, 0.20 },
+    border = { 0.58, 0.48, 0.30 }, accent = { 0.96, 0.72, 0.20 },
+    accent2 = { 0.98, 0.83, 0.43 }, text = { 1.00, 0.92, 0.72 },
+    muted = { 0.76, 0.64, 0.43 }, danger = { 0.96, 0.35, 0.24 },
 }
 
 local FONTS = {
@@ -218,6 +227,7 @@ local CLASS_LABELS = { DEATHKNIGHT = "Death Knight", DEMONHUNTER = "Demon Hunter
 local frame, mainArea, settingsPage, listPane, editorPane, rows, statusText, listScroll
 local macroName, macroBody, bodyLabel, iconPreview, sourceBox, sourceLabel, noteText, editorFontValue
 local editorTitle, editorHint, saveButton, deleteButton, classButton, classMenu
+local modernSkinButton, classicSkinButton, headerLine
 local rowButtons, tabs, styledFrames, styledText, fontObjects = {}, {}, {}, {}, {}
 local selectedRecord, selectedIcon, activeSource = nil, nil, "account"
 local settingsRefreshing = false
@@ -228,12 +238,69 @@ local SelectSource
 
 local function Color(role) return unpack(COLORS[role]) end
 
+local function ApplyFrameBackdrop(object)
+    local role = object.styleRole or "panel"
+    local classic = ns.db and ns.db.skin == "classic"
+    if classic and (role == "background" or role == "panel" or role == "parchment") then
+        local outer = role == "background"
+        object:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            edgeSize = outer and 32 or role == "panel" and 22 or 18,
+            insets = { left = outer and 11 or role == "panel" and 7 or 6, right = outer and 11 or role == "panel" and 7 or 6, top = outer and 11 or role == "panel" and 7 or 6, bottom = outer and 11 or role == "panel" and 7 or 6 },
+        })
+        if not object.classicTexture then
+            object.classicTexture = object:CreateTexture(nil, "BACKGROUND", nil, 1)
+            object.classicTexture:SetPoint("TOPLEFT", 7, -7)
+            object.classicTexture:SetPoint("BOTTOMRIGHT", -7, 7)
+        end
+        if role == "parchment" then
+            object.classicTexture:SetTexture("Interface\\QuestFrame\\QuestBG")
+            object.classicTexture:SetTexCoord(0, 0.5859375, 0, 0.65625)
+            object.classicTexture:SetVertexColor(1, 0.94, 0.78, 0.88)
+        else
+            object.classicTexture:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+            object.classicTexture:SetTexCoord(0, 1, 0, 1)
+            object.classicTexture:SetVertexColor(0.40, 0.32, 0.20, 0.44)
+        end
+        object.classicTexture:Show()
+    elseif classic and object.isWorkshopButton then
+        object:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+        object:SetNormalTexture("Interface\\Buttons\\UI-Panel-Button-Up")
+        object:SetPushedTexture("Interface\\Buttons\\UI-Panel-Button-Down")
+        object:SetHighlightTexture("Interface\\Buttons\\UI-Panel-Button-Highlight", "ADD")
+        for _, texture in ipairs({ object:GetNormalTexture(), object:GetPushedTexture(), object:GetHighlightTexture() }) do
+            if texture then texture:SetTexCoord(0, 0.625, 0, 0.6875) end
+        end
+        if object:GetNormalTexture() then object:GetNormalTexture():SetVertexColor(0.78, 0.20, 0.08, 1) end
+        if object:GetPushedTexture() then object:GetPushedTexture():SetVertexColor(0.58, 0.09, 0.035, 1) end
+        if object:GetHighlightTexture() then object:GetHighlightTexture():SetVertexColor(1, 0.72, 0.18, 0.55) end
+        if object.classicTexture then object.classicTexture:Hide() end
+        object:SetBackdropColor(0, 0, 0, 0)
+        object:SetBackdropBorderColor(0, 0, 0, 0)
+        return
+    else
+        object:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = role == "background" and 16 or 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        if object.isWorkshopButton then
+            if object:GetNormalTexture() then object:GetNormalTexture():SetTexture(nil) end
+            if object:GetPushedTexture() then object:GetPushedTexture():SetTexture(nil) end
+            if object:GetHighlightTexture() then object:GetHighlightTexture():SetTexture(nil) end
+        end
+        if object.classicTexture then object.classicTexture:Hide() end
+    end
+    object:SetBackdropColor(Color(role))
+    object:SetBackdropBorderColor(Color(object.selected and "accent" or "border"))
+end
+
 local function RegisterBackdrop(object, role)
     object.styleRole = role or "panel"
     styledFrames[object] = true
-    object:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    object:SetBackdropColor(Color(object.styleRole))
-    object:SetBackdropBorderColor(Color("border"))
+    ApplyFrameBackdrop(object)
 end
 
 local function Text(parent, size, role, justify)
@@ -249,6 +316,7 @@ end
 
 local function Button(parent, label, width, height)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button.isWorkshopButton = true
     button:SetSize(width, height)
     RegisterBackdrop(button, "panelAlt")
     button.label = Text(button, 12, "text", "CENTER")
@@ -280,23 +348,30 @@ local function SelectedFont()
 end
 
 local function LoadPalette()
-    local palette = PALETTES[ns.db and ns.db.palette or "midnight"] or PALETTES.midnight
+    local classic = ns.db and ns.db.skin == "classic"
+    local palette = classic and CLASSIC_COLORS or (PALETTES[ns.db and ns.db.palette or "midnight"] or PALETTES.midnight)
     local opacity = math.max(0.60, math.min(1, tonumber(ns.db and ns.db.opacity) or 0.97))
     for role, color in pairs(palette) do
         if role ~= "label" and COLORS[role] then
             COLORS[role][1], COLORS[role][2], COLORS[role][3] = color[1], color[2], color[3]
         end
     end
-    COLORS.background[4] = opacity
-    COLORS.panel[4], COLORS.panelAlt[4], COLORS.input[4] = math.min(1, opacity + 0.02), math.min(1, opacity + 0.03), math.min(1, opacity + 0.03)
+    COLORS.background[4] = classic and 1 or opacity
+    if classic then
+        COLORS.panel[4], COLORS.panelAlt[4], COLORS.input[4] = 1, 1, 1
+    else
+        COLORS.panel[4], COLORS.panelAlt[4], COLORS.input[4] = math.min(1, opacity + 0.02), math.min(1, opacity + 0.03), math.min(1, opacity + 0.03)
+    end
+    if not classic then
+        COLORS.parchment[1], COLORS.parchment[2], COLORS.parchment[3] = COLORS.input[1], COLORS.input[2], COLORS.input[3]
+    end
 end
 
 local function ApplyAppearance()
     LoadPalette()
     local option = SelectedFont()
     for object in pairs(styledFrames) do
-        object:SetBackdropColor(Color(object.styleRole or "panel"))
-        object:SetBackdropBorderColor(Color(object.selected and "accent" or "border"))
+        ApplyFrameBackdrop(object)
     end
     for object in pairs(styledText) do object:SetTextColor(Color(object.colorRole or "text")) end
     for object in pairs(fontObjects) do
@@ -308,6 +383,15 @@ local function ApplyAppearance()
         end
     end
     if editorFontValue and ns.db then editorFontValue:SetText(string.format("%d px", tonumber(ns.db.fontSize) or 13)) end
+    if macroBody then macroBody:SetTextColor(Color(ns.db and ns.db.skin == "classic" and "ink" or "text")) end
+    if headerLine then headerLine:SetColorTexture(Color("accent")) end
+    if modernSkinButton and classicSkinButton and ns.db then
+        modernSkinButton.selected = ns.db.skin ~= "classic"
+        classicSkinButton.selected = ns.db.skin == "classic"
+        modernSkinButton.label:SetText((modernSkinButton.selected and "✓  " or "") .. "Modern")
+        classicSkinButton.label:SetText((classicSkinButton.selected and "✓  " or "") .. "Classic")
+        ApplyFrameBackdrop(modernSkinButton); ApplyFrameBackdrop(classicSkinButton)
+    end
     if frame and not scaleDragging then frame:SetScale(ns.db and ns.db.scale or 1) end
 end
 
@@ -610,10 +694,15 @@ local function BuildSettings()
     settingsPage = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     settingsPage:SetPoint("TOPLEFT", 22, -108); settingsPage:SetPoint("BOTTOMRIGHT", -22, 24); RegisterBackdrop(settingsPage, "panel")
     local title = Text(settingsPage, 19, "text"); title:SetPoint("TOPLEFT", 24, -22); title:SetText("Appearance settings")
-    local hint = Text(settingsPage, 11, "muted"); hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7); hint:SetText("Choose a font and adjust transparency. Resize the window from its lower-right corner.")
+    local hint = Text(settingsPage, 11, "muted"); hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7); hint:SetPoint("RIGHT", -24, 0); hint:SetWordWrap(false); hint:SetText("Choose a skin, font, and transparency. Resize the window from its lower-right corner.")
+    local skinTitle = Text(settingsPage, 11, "muted"); skinTitle:SetPoint("TOPLEFT", 28, -82); skinTitle:SetText("WINDOW SKIN")
+    modernSkinButton = Button(settingsPage, "Modern", 145, 34); modernSkinButton:SetPoint("TOPLEFT", 28, -103)
+    classicSkinButton = Button(settingsPage, "Classic", 145, 34); classicSkinButton:SetPoint("LEFT", modernSkinButton, "RIGHT", 10, 0)
+    modernSkinButton:SetScript("OnClick", function() ns.db.skin = "modern"; ApplyAppearance(); settingsPage:Refresh() end)
+    classicSkinButton:SetScript("OnClick", function() ns.db.skin = "classic"; ApplyAppearance(); settingsPage:Refresh() end)
     DiscoverSharedMediaFonts()
-    local fontTitle = Text(settingsPage, 11, "muted"); fontTitle:SetPoint("TOPLEFT", 28, -92); fontTitle:SetText("ADDON FONT")
-    local fontButton = Button(settingsPage, "", 300, 34); fontButton:SetPoint("TOPLEFT", 28, -113)
+    local fontTitle = Text(settingsPage, 11, "muted"); fontTitle:SetPoint("TOPLEFT", 28, -165); fontTitle:SetText("ADDON FONT")
+    local fontButton = Button(settingsPage, "", 300, 34); fontButton:SetPoint("TOPLEFT", 28, -186)
     local fontMenu = CreateFrame("Frame", nil, settingsPage, "BackdropTemplate")
     fontMenu:SetSize(360, 250); fontMenu:SetFrameLevel(settingsPage:GetFrameLevel() + 20); fontMenu:SetClampedToScreen(true); RegisterBackdrop(fontMenu, "panel"); fontMenu:Hide()
     local fontMenuTitle = Text(fontMenu, 11, "muted"); fontMenuTitle:SetPoint("TOPLEFT", 12, -10); fontMenuTitle:SetText("SELECT FONT")
@@ -651,7 +740,7 @@ local function BuildSettings()
         RefreshFontMenu(); fontMenu:ClearAllPoints(); fontMenu:SetPoint("TOPLEFT", fontButton, "BOTTOMLEFT", 0, -6); fontMenu:Show()
     end)
 
-    local opacity, opacityValue = Slider(settingsPage, "WINDOW OPACITY", -190, 0.55, 1, 0.05)
+    local opacity, opacityValue = Slider(settingsPage, "WINDOW OPACITY", -263, 0.55, 1, 0.05)
     opacity:SetScript("OnValueChanged", function(_, value)
         value = math.floor(value * 20 + 0.5) / 20; opacityValue:SetText(string.format("%d%%", value * 100))
         if not settingsRefreshing then ns.db.opacity = value; ApplyAppearance() end
@@ -684,10 +773,12 @@ local function BuildUI()
         ns.db.window.point, ns.db.window.relativePoint, ns.db.window.x, ns.db.window.y = point, relativePoint, x, y
     end)
     RegisterBackdrop(frame, "background")
-    local title = Text(frame, 22, "text"); title:SetPoint("TOPLEFT", 24, -18); title:SetText("REVATH'S |cff33c5d0MACRO WORKSHOP|r")
-    local subtitle = Text(frame, 10, "muted"); subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -4); subtitle:SetText("ACCOUNT, CHARACTER, AND COMMUNITY MACROS")
     local close = Button(frame, "×", 32, 30); close:SetPoint("TOPRIGHT", -15, -15); close:SetScript("OnClick", function() frame:Hide() end)
     local settings = Button(frame, "Settings", 76, 30); settings:SetPoint("RIGHT", close, "LEFT", -7, 0)
+    local title = Text(frame, 22, "text"); title:SetPoint("TOPLEFT", 24, -18); title:SetText("REVATH'S")
+    local titleAccent = Text(frame, 22, "accent"); titleAccent:SetPoint("LEFT", title, "RIGHT", 6, 0); titleAccent:SetPoint("RIGHT", settings, "LEFT", -18, 0); titleAccent:SetWordWrap(false); titleAccent:SetText("MACRO WORKSHOP")
+    local subtitle = Text(frame, 10, "muted"); subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -4); subtitle:SetPoint("RIGHT", settings, "LEFT", -18, 0); subtitle:SetWordWrap(false); subtitle:SetText("ACCOUNT, CHARACTER, AND COMMUNITY MACROS")
+    headerLine = frame:CreateTexture(nil, "ARTWORK"); headerLine:SetHeight(2); headerLine:SetPoint("TOPLEFT", 22, -61); headerLine:SetPoint("RIGHT", -22, 0); headerLine:SetColorTexture(Color("accent")); headerLine:SetAlpha(0.45)
     settings:SetScript("OnClick", function()
         if settingsPage:IsShown() then SelectSource(activeSource) else mainArea:Hide(); settingsPage:Show(); settingsPage:Refresh() end
     end)
@@ -727,20 +818,21 @@ local function BuildUI()
     rows = CreateFrame("Frame", nil, listScroll); rows:SetSize(228, 1); listScroll:SetScrollChild(rows)
 
     editorPane = CreateFrame("Frame", nil, mainArea, "BackdropTemplate"); editorPane:SetPoint("TOPLEFT", listPane, "TOPRIGHT", 14, 0); editorPane:SetPoint("BOTTOMRIGHT"); RegisterBackdrop(editorPane, "panel")
-    editorTitle = Text(editorPane, 18, "text"); editorTitle:SetPoint("TOPLEFT", 20, -18); editorTitle:SetText("Account Macro Editor")
-    editorHint = Text(editorPane, 11, "muted"); editorHint:SetPoint("TOPLEFT", editorTitle, "BOTTOMLEFT", 0, -6); editorHint:SetText("Create and edit account-wide macros.")
-    iconPreview = editorPane:CreateTexture(nil, "ARTWORK"); iconPreview:SetSize(42, 42); iconPreview:SetPoint("TOPRIGHT", -20, -18); iconPreview:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    local iconCard = CreateFrame("Frame", nil, editorPane, "BackdropTemplate"); iconCard:SetSize(50, 50); iconCard:SetPoint("TOPRIGHT", -20, -18); RegisterBackdrop(iconCard, "panelAlt")
+    iconPreview = iconCard:CreateTexture(nil, "ARTWORK"); iconPreview:SetPoint("TOPLEFT", 4, -4); iconPreview:SetPoint("BOTTOMRIGHT", -4, 4); iconPreview:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    editorTitle = Text(editorPane, 18, "text"); editorTitle:SetPoint("TOPLEFT", 20, -18); editorTitle:SetPoint("RIGHT", iconCard, "LEFT", -16, 0); editorTitle:SetWordWrap(false); editorTitle:SetText("Account Macro Editor")
+    editorHint = Text(editorPane, 11, "muted"); editorHint:SetPoint("TOPLEFT", editorTitle, "BOTTOMLEFT", 0, -6); editorHint:SetPoint("RIGHT", iconCard, "LEFT", -16, 0); editorHint:SetWordWrap(false); editorHint:SetText("Create and edit account-wide macros.")
     local iconButton = Button(editorPane, "Change icon", 96, 25)
     iconButton:SetPoint("TOPRIGHT", -20, -66)
     iconButton:SetScript("OnClick", ShowIconPicker)
-    local nameLabel = Text(editorPane, 11, "muted"); nameLabel:SetPoint("TOPLEFT", 20, -70); nameLabel:SetText("MACRO NAME")
+    local nameLabel = Text(editorPane, 11, "muted"); nameLabel:SetPoint("TOPLEFT", 20, -70); nameLabel:SetPoint("RIGHT", iconButton, "LEFT", -12, 0); nameLabel:SetWordWrap(false); nameLabel:SetText("MACRO NAME")
     macroName = Edit(editorPane); macroName:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -6); macroName:SetPoint("RIGHT", iconButton, "LEFT", -12, 0); macroName:SetHeight(35); macroName:SetMaxLetters(16)
-    bodyLabel = Text(editorPane, 11, "muted"); bodyLabel:SetPoint("TOPLEFT", 20, -128); bodyLabel:SetText("MACRO BODY")
+    bodyLabel = Text(editorPane, 11, "muted"); bodyLabel:SetPoint("TOPLEFT", 20, -128); bodyLabel:SetPoint("RIGHT", -145, 0); bodyLabel:SetWordWrap(false); bodyLabel:SetText("MACRO BODY")
     local fontMinus = Button(editorPane, "−", 27, 23); fontMinus:SetPoint("TOPRIGHT", -57, -111)
     editorFontValue = Text(editorPane, 10, "accent2", "RIGHT"); editorFontValue:SetPoint("RIGHT", fontMinus, "LEFT", -7, 0); editorFontValue:SetWidth(40)
     local fontPlus = Button(editorPane, "+", 27, 23); fontPlus:SetPoint("TOPRIGHT", -20, -111)
     fontMinus:SetScript("OnClick", function() ChangeEditorFontSize(-1) end); fontPlus:SetScript("OnClick", function() ChangeEditorFontSize(1) end)
-    macroBody = Edit(editorPane, true); macroBody:SetPoint("TOPLEFT", bodyLabel, "BOTTOMLEFT", 0, -6); macroBody:SetPoint("BOTTOMRIGHT", -20, 139); macroBody:SetMaxLetters(255)
+    macroBody = Edit(editorPane, true); macroBody.styleRole = "parchment"; ApplyFrameBackdrop(macroBody); macroBody:SetPoint("TOPLEFT", bodyLabel, "BOTTOMLEFT", 0, -6); macroBody:SetPoint("BOTTOMRIGHT", -20, 139); macroBody:SetMaxLetters(255)
     local suggestionPopup = CreateFrame("Frame", nil, editorPane, "BackdropTemplate"); suggestionPopup:SetSize(370, 224); suggestionPopup:SetFrameLevel(editorPane:GetFrameLevel() + 10); RegisterBackdrop(suggestionPopup, "panel"); suggestionPopup:Hide()
     local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("SYNTAX SUGGESTIONS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
     local suggestionHint = Text(suggestionPopup, 12, "muted"); suggestionHint:SetPoint("TOPLEFT", 14, -42); suggestionHint:SetWidth(340); suggestionHint:SetText("Start typing spell name"); suggestionHint:Hide()
