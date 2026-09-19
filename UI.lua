@@ -75,6 +75,15 @@ end
 
 -- WoW cannot access Reddit from Lua. This small, reviewable catalog is bundled with the addon.
 -- Scores are snapshots from the linked threads, not live values.
+local function WowheadMacro(classKey, classSlug, specSlug, specLabel, name, body, note)
+    return {
+        name = name, class = classKey, spec = specLabel, icon = "Interface\\Icons\\INV_Misc_QuestionMark",
+        body = body, detail = specLabel .. " · Wowhead", score = 76,
+        source = "https://www.wowhead.com/guide/classes/" .. classSlug .. "/" .. specSlug .. "/addons-macro-ui-imports",
+        note = note,
+    }
+end
+
 local INTERNET_MACROS = {
     {
         name = "Rescue Mouseover", class = "EVOKER", icon = "Interface\\Icons\\Ability_Evoker_Rescue",
@@ -147,6 +156,60 @@ local INTERNET_MACROS = {
     { name = "Wind Shear Focus", class = "SHAMAN", icon = "Interface\\Icons\\Spell_Nature_Cyclone", body = "#showtooltip Wind Shear\n/cast [@focus,harm,nodead][] Wind Shear", detail = "Shaman · Focus interrupt", score = 92, source = "Community template", note = "Interrupts your hostile focus, otherwise your target." },
     { name = "Soulstone Mouseover", class = "WARLOCK", icon = "Interface\\Icons\\Spell_Shadow_SoulGem", body = "#showtooltip Soulstone\n/use [@mouseover,help][] Soulstone", detail = "Warlock · Resurrection", score = 88, source = "Community template", note = "Uses Soulstone on a friendly mouseover or your target." },
     { name = "Intervene Mouseover", class = "WARRIOR", icon = "Interface\\Icons\\Ability_Warrior_VictoryRush", body = "#showtooltip Intervene\n/cast [@mouseover,help,nodead][] Intervene", detail = "Warrior · Utility", score = 84, source = "Community template", note = "Intervenes to a friendly mouseover." },
+
+    -- A concise selection from Wowhead's current per-specialization macro guides.
+    WowheadMacro("DEATHKNIGHT", "death-knight", "blood", "Blood", "Focus Mind Freeze", "#showtooltip Mind Freeze\n/cast [@focus,harm,nodead][] Mind Freeze", "Interrupts a hostile focus and falls back to the current target."),
+    WowheadMacro("DEATHKNIGHT", "death-knight", "frost", "Frost", "Pillar Obliterate", "#showtooltip Pillar of Frost\n/cast Pillar of Frost\n/cast Obliterate\n/cast Raise Dead", "Combines Pillar of Frost with the guide's Obliterate and Raise Dead sequence."),
+    WowheadMacro("DEATHKNIGHT", "death-knight", "unholy", "Unholy", "Army Burst Setup", "#showtooltip Army of the Dead\n/cast Army of the Dead\n/use Tempered Potion\n/use 13\n/cast Dark Transformation", "Combines the guide's Army opener, potion, upper trinket, and Dark Transformation."),
+
+    WowheadMacro("DEMONHUNTER", "demon-hunter", "devourer", "Devourer", "Void Metamorphosis Trinket", "#showtooltip Void Metamorphosis\n/cast Void Metamorphosis\n/use 13", "Activates Void Metamorphosis with the upper trinket."),
+    WowheadMacro("DEMONHUNTER", "demon-hunter", "havoc", "Havoc", "Metamorphosis Self", "#showtooltip Metamorphosis\n/cast [@player] Metamorphosis", "Places Metamorphosis directly beneath your character."),
+    WowheadMacro("DEMONHUNTER", "demon-hunter", "vengeance", "Vengeance", "Sigil of Flame Cursor", "#showtooltip Sigil of Flame\n/cast [@cursor] Sigil of Flame", "Places Sigil of Flame instantly at the cursor."),
+
+    WowheadMacro("DRUID", "druid", "balance", "Balance", "Innervate Mouseover", "#showtooltip Innervate\n/cast [@mouseover,help,nodead][] Innervate", "Casts Innervate on a living friendly mouseover or the normal target."),
+    WowheadMacro("DRUID", "druid", "feral", "Feral", "Berserk Burst", "#showtooltip Berserk\n/use Berserk\n/use Tiger's Fury\n/use 13\n/use Tempered Potion", "Combines the guide's Berserk, Tiger's Fury, trinket, and potion setup."),
+    WowheadMacro("DRUID", "druid", "guardian", "Guardian", "Incarnation Trinket", "#showtooltip Incarnation: Guardian of Ursoc\n/use 13\n/cast Incarnation: Guardian of Ursoc", "Uses the upper trinket with Incarnation: Guardian of Ursoc."),
+    WowheadMacro("DRUID", "druid", "restoration", "Restoration", "Rejuvenation Mouseover", "#showtooltip Rejuvenation\n/cast [@mouseover,help,nodead][] Rejuvenation", "Casts Rejuvenation on a living friendly mouseover or normal target."),
+
+    WowheadMacro("EVOKER", "evoker", "augmentation", "Augmentation", "Prescience Mouseover", "#showtooltip Prescience(Bronze)\n/cast [@mouseover,help,nodead][] Prescience(Bronze)", "Casts Prescience on a living friendly mouseover or normal target."),
+    WowheadMacro("EVOKER", "evoker", "devastation", "Devastation", "Dragonrage Cancel Deep Breath", "#showtooltip Dragonrage\n/cancelaura Deep Breath\n/cast Dragonrage", "Cancels Deep Breath before activating Dragonrage."),
+    WowheadMacro("EVOKER", "evoker", "preservation", "Preservation", "Preservation Major Cooldown", "#showtooltip [known:Stasis] Stasis; [known:Dream Flight] Dream Flight; Dragonrage\n/use 13\n/use 14\n/cast [known:Stasis] Stasis; [known:Dream Flight] Dream Flight; Dragonrage", "Chooses the known major cooldown and activates available trinkets."),
+
+    WowheadMacro("HUNTER", "hunter", "beast-mastery", "Beast Mastery", "Kill Command Pet Attack", "#showtooltip Kill Command\n/petattack\n/cast Kill Command", "Orders the pet to attack whenever Kill Command is used."),
+    WowheadMacro("HUNTER", "hunter", "marksmanship", "Marksmanship", "Disengage Stopcast", "#showtooltip Disengage\n/stopcasting [nochanneling:Rapid Fire]\n/use Disengage", "Stops other casts for Disengage without cancelling Rapid Fire."),
+    WowheadMacro("HUNTER", "hunter", "survival", "Survival", "Protected Turtle", "#showtooltip Aspect of the Turtle\n/cast !Aspect of the Turtle", "Prevents repeated presses from cancelling Aspect of the Turtle."),
+
+    WowheadMacro("MAGE", "mage", "arcane", "Arcane", "Arcane Surge Trinket", "#showtooltip Arcane Surge\n/use 13\n/cast Arcane Surge\n/cqs", "Uses the upper trinket with Arcane Surge and clears queued spell input."),
+    WowheadMacro("MAGE", "mage", "fire", "Fire", "Combustion Trinket", "#showtooltip Combustion\n/use 13\n/cast Combustion", "Uses the upper trinket with Combustion."),
+    WowheadMacro("MAGE", "mage", "frost", "Frost", "Blizzard Cursor", "#showtooltip Blizzard\n/cast [@cursor] Blizzard", "Places Blizzard instantly at the cursor."),
+
+    WowheadMacro("MONK", "monk", "brewmaster", "Brewmaster", "Ring of Peace Cursor", "#showtooltip Ring of Peace\n/cast [@cursor] Ring of Peace", "Places Ring of Peace instantly at the cursor."),
+    WowheadMacro("MONK", "monk", "mistweaver", "Mistweaver", "Soothing Mist Mouseover", "#showtooltip Soothing Mist\n/cast [@mouseover,help,nodead][] Soothing Mist", "Casts Soothing Mist on a living friendly mouseover or normal target."),
+    WowheadMacro("MONK", "monk", "windwalker", "Windwalker", "Focus Spear Hand Strike", "#showtooltip Spear Hand Strike\n/cast [@focus,harm,nodead][] Spear Hand Strike", "Interrupts a hostile focus and falls back to the current target."),
+
+    WowheadMacro("PALADIN", "paladin", "holy", "Holy", "Holy Shock Mouseover", "#showtooltip Holy Shock\n/cast [@mouseover,exists][] Holy Shock", "Casts Holy Shock on the mouseover or normal target."),
+    WowheadMacro("PALADIN", "paladin", "protection", "Protection", "Avenging Wrath Trinket", "#showtooltip Avenging Wrath\n/use 13\n/cast Avenging Wrath", "Uses the upper trinket with Avenging Wrath."),
+    WowheadMacro("PALADIN", "paladin", "retribution", "Retribution", "Focus Rebuke", "#showtooltip Rebuke\n/cast [@focus,harm,nodead][] Rebuke", "Interrupts a hostile focus and falls back to the current target."),
+
+    WowheadMacro("PRIEST", "priest", "discipline", "Discipline", "Smite Mouseover", "#showtooltip Smite\n/cast [@mouseover,harm,nodead,nochanneling:Penance,nochanneling:Dark Reprimand][nochanneling:Penance,nochanneling:Dark Reprimand] Smite", "Casts Smite at a hostile mouseover without cancelling Penance or Dark Reprimand."),
+    WowheadMacro("PRIEST", "priest", "holy", "Holy", "Flash Heal Mouseover", "#showtooltip Flash Heal\n/cast [@mouseover,help,nodead][] Flash Heal", "Casts Flash Heal on a living friendly mouseover or normal target."),
+    WowheadMacro("PRIEST", "priest", "shadow", "Shadow", "Shadow Word: Pain Mouseover", "#showtooltip Shadow Word: Pain\n/cast [@mouseover,harm,nodead][] Shadow Word: Pain", "Applies Shadow Word: Pain to a hostile mouseover or normal target."),
+
+    WowheadMacro("ROGUE", "rogue", "assassination", "Assassination", "Deathmark Trinket", "#showtooltip Deathmark\n/use Deathmark\n/use 13", "Uses Deathmark with the upper trinket."),
+    WowheadMacro("ROGUE", "rogue", "outlaw", "Outlaw", "Grappling Hook Cursor", "#showtooltip Grappling Hook\n/cast [@cursor] Grappling Hook", "Places Grappling Hook instantly at the cursor."),
+    WowheadMacro("ROGUE", "rogue", "subtlety", "Subtlety", "Coup or Black Powder", "#showtooltip\n/cast Coup de Grace\n/cast Black Powder", "Attempts Coup de Grace, then falls back to Black Powder when unavailable."),
+
+    WowheadMacro("SHAMAN", "shaman", "elemental", "Elemental", "Ascendance Burst", "#showtooltip Ascendance\n/use Ascendance\n/use 13\n/use Ancestral Swiftness\n/use Nature's Swiftness\n/use Tempered Potion", "Combines the guide's Ascendance burst actions with the upper trinket."),
+    WowheadMacro("SHAMAN", "shaman", "enhancement", "Enhancement", "Healing Surge Self", "#showtooltip Healing Surge\n/cast [@player] Healing Surge", "Casts Healing Surge directly on yourself."),
+    WowheadMacro("SHAMAN", "shaman", "restoration", "Restoration", "Riptide Mouseover", "#showtooltip Riptide\n/cast [@mouseover,help,nodead][] Riptide", "Applies the guide's mouseover-heal template to Riptide."),
+
+    WowheadMacro("WARLOCK", "warlock", "affliction", "Affliction", "Soulstone Mouseover", "#showtooltip Soulstone\n/cast [@mouseover,exists][] Soulstone", "Uses Soulstone on the mouseover or normal target."),
+    WowheadMacro("WARLOCK", "warlock", "demonology", "Demonology", "Shadowfury Cursor", "#showtooltip Shadowfury\n/cast [@cursor] Shadowfury", "Places Shadowfury instantly at the cursor."),
+    WowheadMacro("WARLOCK", "warlock", "destruction", "Destruction", "Immolate Mouseover", "#showtooltip Immolate\n/cast [@mouseover,harm,nodead][] Immolate", "Applies Immolate to a hostile mouseover or normal target."),
+
+    WowheadMacro("WARRIOR", "warrior", "arms", "Arms", "Stance Selector", "#showtooltip\n/cast [stance:2] !Defensive Stance; [known:386164] !Battle Stance; [known:386196] !Berserker Stance", "Selects the appropriate known stance without toggling it off."),
+    WowheadMacro("WARRIOR", "warrior", "fury", "Fury", "Charge Victory Rush", "#showtooltip\n/cast Charge\n/cast Victory Rush\n/cancelaura Bladestorm", "Uses Charge or Victory Rush and permits cancelling Bladestorm."),
+    WowheadMacro("WARRIOR", "warrior", "protection", "Protection", "Avatar Trinket", "#showtooltip Avatar\n/use 13\n/cast Avatar", "Uses the upper trinket with Avatar."),
 }
 
 local CLASS_ORDER = { "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVOKER", "HUNTER", "MAGE", "MONK", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR" }
