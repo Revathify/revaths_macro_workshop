@@ -418,11 +418,11 @@ local function RecordsForSource()
         local copy = {}
         for key, value in pairs(item) do copy[key] = value end
         copy.kind = "internet"
-        copy.classMatch = copy.class == nil or copy.class == playerClass
+        copy.classRank = copy.class == playerClass and 2 or (copy.class == nil and 1 or 0)
         result[#result + 1] = copy
     end
     table.sort(result, function(a, b)
-        if a.classMatch ~= b.classMatch then return a.classMatch end
+        if a.classRank ~= b.classRank then return a.classRank > b.classRank end
         return a.score > b.score
     end)
     return result
