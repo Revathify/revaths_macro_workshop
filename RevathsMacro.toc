@@ -2,7 +2,7 @@
 ## Title: Revath's Macro Workshop
 ## Notes: A customizable account, character, and community macro workshop.
 ## Author: Revath#2331
-## Version: 1.0.13
+## Version: 1.0.14
 ## SavedVariables: RevathsMacroDB
 ## Category: User Interface
 
