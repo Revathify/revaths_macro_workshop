@@ -743,6 +743,7 @@ local function BuildUI()
     macroBody = Edit(editorPane, true); macroBody:SetPoint("TOPLEFT", bodyLabel, "BOTTOMLEFT", 0, -6); macroBody:SetPoint("BOTTOMRIGHT", -20, 139); macroBody:SetMaxLetters(255)
     local suggestionPopup = CreateFrame("Frame", nil, editorPane, "BackdropTemplate"); suggestionPopup:SetSize(370, 224); suggestionPopup:SetFrameLevel(editorPane:GetFrameLevel() + 10); RegisterBackdrop(suggestionPopup, "panel"); suggestionPopup:Hide()
     local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("SYNTAX SUGGESTIONS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+    local suggestionHint = Text(suggestionPopup, 12, "muted"); suggestionHint:SetPoint("TOPLEFT", 14, -42); suggestionHint:SetWidth(340); suggestionHint:SetText("Start typing spell name"); suggestionHint:Hide()
     local caretMeasure = macroBody:CreateFontString(nil, "OVERLAY"); caretMeasure:SetAlpha(0); caretMeasure:SetPoint("TOPLEFT", macroBody, "TOPLEFT")
     local commandCatalog = {
         { "/cast ", "Cast a spell" }, { "/castsequence ", "Cast spells in sequence" }, { "/castrandom ", "Cast one listed spell" },
@@ -898,6 +899,8 @@ local function BuildUI()
         local text = macroBody:GetText() or ""; local cursor = macroBody:GetCursorPosition() or #text; local before = text:sub(1, cursor)
         local line = before:match("([^\n]*)$") or ""; local lineStart = cursor - #line + 1
         matches, selectedSuggestion = {}, 1
+        suggestionHint:Hide()
+        local infoOnly = false
         local openBracket = line:match(".*()%[")
         if openBracket and not line:sub(openBracket):find("%]") then
             local conditionText = line:sub(openBracket + 1)
@@ -973,13 +976,17 @@ local function BuildUI()
                             end
                             suggestionTitle:SetText("STEP 1/3  ·  CAST TARGET  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                         end
-                        for _, name in ipairs(spellNames) do
-                            if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
-                                matches[#matches + 1] = { insert = name, detail = "Known spell" }; if #matches >= 8 then break end
+                        if prefix ~= "" then
+                            for _, name in ipairs(spellNames) do
+                                if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
+                                    matches[#matches + 1] = { insert = name, detail = "Known spell" }; if #matches >= 8 then break end
+                                end
                             end
+                        elseif #matches == 0 then
+                            infoOnly = true; suggestionHint:SetText("Start typing spell name"); suggestionHint:Show()
                         end
                     end
-                    if #matches < 8 and (commandLower == "/use" or commandLower == "/userandom") then
+                    if #matches < 8 and prefix ~= "" and (commandLower == "/use" or commandLower == "/userandom") then
                         for _, name in ipairs(itemNames) do
                             if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
                                 matches[#matches + 1] = { insert = name, detail = "Bag item or equipment slot" }; if #matches >= 8 then break end
@@ -990,7 +997,7 @@ local function BuildUI()
                 end
             end
         end
-        if #matches == 0 then suggestionPopup:Hide(); return end
+        if #matches == 0 and not infoOnly then suggestionPopup:Hide(); return end
         local currentLine = before:match("([^\n]*)$") or ""
         local fontPath, fontSize, fontFlags = macroBody:GetFont()
         caretMeasure:SetFont(fontPath or STANDARD_TEXT_FONT, fontSize or 13, fontFlags or ""); caretMeasure:SetText(currentLine)
