@@ -2,6 +2,8 @@ local addonName, ns = ...
 
 ns.name = addonName
 ns.db = nil
+ns.version = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(addonName, "Version"))
+    or (GetAddOnMetadata and GetAddOnMetadata(addonName, "Version")) or "unknown"
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
@@ -11,6 +13,11 @@ events:SetScript("OnEvent", function(_, event, loadedName)
         if type(RevathsMacroDB) ~= "table" then RevathsMacroDB = {} end
         RevathsMacroDB.font = type(RevathsMacroDB.font) == "string" and RevathsMacroDB.font or "friz"
         RevathsMacroDB.fontSize = math.max(10, math.min(24, tonumber(RevathsMacroDB.fontSize) or 13))
+        RevathsMacroDB.scale = math.max(0.70, math.min(1.15, tonumber(RevathsMacroDB.scale) or 1))
+        RevathsMacroDB.opacity = math.max(0.60, math.min(1, tonumber(RevathsMacroDB.opacity) or 0.97))
+        RevathsMacroDB.palette = type(RevathsMacroDB.palette) == "string" and RevathsMacroDB.palette or "midnight"
+        RevathsMacroDB.compactRows = RevathsMacroDB.compactRows == true
+        RevathsMacroDB.window = type(RevathsMacroDB.window) == "table" and RevathsMacroDB.window or {}
         ns.db = RevathsMacroDB
         if ns.Initialize then ns:Initialize() end
     elseif event == "ADDON_LOADED" and loadedName ~= "Blizzard_MacroUI" then

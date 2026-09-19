@@ -1,6 +1,6 @@
 # Revath's Macro Workshop
 
-A standalone World of Warcraft macro editor with a customizable font, editor font size, macro import, and create/update actions.
+A standalone World of Warcraft macro editor with separate account, character, and curated community views.
 
 ## Install
 
@@ -9,9 +9,14 @@ Copy the `RevathsMacro` folder into `_retail_/Interface/AddOns/` and reload the 
 ## Use
 
 - Type `/rmacro` or `/macroworkshop` to open the window.
-- Click an existing macro to import its name, icon, and body.
-- Edit the macro and choose `Create / Update`.
-- Use the font menu and size slider to customize the editor.
+- Use **Account Macros** and **Character Macros** to browse the two Blizzard macro stores separately.
+- Use **From the Internet** for bundled, attributed community templates. Review placeholders before saving.
+- Every list row shows the macro icon. The editor preserves the selected macro's icon.
+- Save an edited or imported macro directly to the account or the current character.
+- Open **Settings** to change the palette, font, editor size, scale, opacity, and row density.
+- Drag the title area to move the window or the lower-right handle to resize it. Position and size are saved.
+
+The community catalog is bundled because World of Warcraft addons cannot make live Reddit requests. Popularity values are snapshots from the linked Reddit discussion and are not live scores.
 
 Macro create/update calls use Blizzard's protected macro API and may be refused during combat. Importing and editing remain available.
 
