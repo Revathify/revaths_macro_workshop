@@ -2,7 +2,7 @@
 ## Title: Revath's Macro Workshop
 ## Notes: A customizable macro editor with font controls and macro import.
 ## Author: Revath#2331
-## Version: 1.0.2
+## Version: 1.0.3
 ## SavedVariables: RevathsMacroDB
 ## Category: User Interface
 
