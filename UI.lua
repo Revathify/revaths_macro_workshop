@@ -238,17 +238,6 @@ local function ChangeEditorFontSize(delta)
     ApplyAppearance()
 end
 
-local function CloseAddonAndOpenGameMenu()
-    if frame then frame:Hide() end
-    if C_Timer and C_Timer.After then
-        C_Timer.After(0, function()
-            if ToggleGameMenu then ToggleGameMenu() elseif GameMenuFrame_Show then GameMenuFrame_Show() end
-        end)
-    elseif ToggleGameMenu then
-        ToggleGameMenu()
-    end
-end
-
 local function PreserveWindowCenterAtScale(value)
     if not frame then return end
     local centerX, centerY = frame:GetCenter()
@@ -593,8 +582,6 @@ local function BuildUI()
     frame:SetFrameStrata("HIGH"); frame:SetClampedToScreen(true); frame:SetMovable(true); frame:SetResizable(true)
     if frame.SetResizeBounds then frame:SetResizeBounds(820, 640, 2400, 1800) end
     frame:EnableMouse(true); frame:RegisterForDrag("LeftButton"); frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:EnableKeyboard(true); frame:SetPropagateKeyboardInput(false)
-    frame:SetScript("OnKeyDown", function(_, key) if key == "ESCAPE" then CloseAddonAndOpenGameMenu() end end)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local point, _, relativePoint, x, y = self:GetPoint(1)
@@ -669,12 +656,12 @@ local function BuildUI()
         bodyLabel:SetText(string.format("MACRO BODY  %d / 255", string.len(self:GetText() or "")))
         if userInput then UpdateSuggestions() end
     end)
-    macroName:SetScript("OnEscapePressed", function() macroName:ClearFocus(); CloseAddonAndOpenGameMenu() end)
-    macroBody:SetScript("OnEscapePressed", function() macroBody:ClearFocus(); CloseAddonAndOpenGameMenu() end)
+    macroName:SetScript("OnEscapePressed", function() macroName:ClearFocus() end)
+    macroBody:SetScript("OnEscapePressed", function() macroBody:ClearFocus() end)
     sourceLabel = Text(editorPane, 10, "muted"); sourceLabel:SetPoint("BOTTOMLEFT", 20, 104); sourceLabel:SetText("SOURCE")
     sourceBox = Edit(editorPane); sourceBox:SetPoint("LEFT", sourceLabel, "RIGHT", 10, 0); sourceBox:SetPoint("RIGHT", -20, 0); sourceBox:SetHeight(27)
     sourceBox:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
-    sourceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus(); CloseAddonAndOpenGameMenu() end)
+    sourceBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     sourceBox:SetScript("OnTextChanged", function(self, userInput) if userInput and selectedRecord then self:SetText(selectedRecord.source or ""); self:HighlightText() end end)
     noteText = Text(editorPane, 10, "muted"); noteText:SetPoint("BOTTOMLEFT", 20, 78); noteText:SetPoint("RIGHT", -20, 0); noteText:SetWordWrap(true)
     local newButton = Button(editorPane, "New", 76, 31); newButton:SetPoint("BOTTOMLEFT", 20, 18); newButton:SetScript("OnClick", ClearEditor)
@@ -690,7 +677,7 @@ local function BuildUI()
     resize:SetScript("OnLeave", function(self) self.label:SetTextColor(Color("accent")); GameTooltip:Hide() end)
     resize:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
     resize:SetScript("OnMouseUp", function() frame:StopMovingOrSizing(); ns.db.window.width, ns.db.window.height = frame:GetWidth(), frame:GetHeight() end)
-    BuildSettings(); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
+    BuildSettings(); table.insert(UISpecialFrames, frame:GetName()); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
 end
 
 function ns:Initialize() BuildUI() end
