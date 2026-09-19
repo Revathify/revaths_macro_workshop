@@ -118,6 +118,24 @@ local INTERNET_MACROS = {
         source = "https://reddit.com/r/wow/comments/102x6y8/",
         note = "Stops the current cast before using a Healthstone. Review before use on a healer.",
     },
+    {
+        name = "Shadow Word: Death Focus", class = "PRIEST", icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain",
+        body = "#showtooltip Shadow Word: Death\n/cast [@focus,harm,nodead] Shadow Word: Death",
+        detail = "Shadow Priest · Focus interrupt", score = 90,
+        source = "Community template", note = "Casts Shadow Word: Death on your focus target.",
+    },
+    {
+        name = "Vampiric Touch Mouseover", class = "PRIEST", icon = "Interface\\Icons\\Spell_Holy_Stoicism",
+        body = "#showtooltip Vampiric Touch\n/cast [@mouseover,harm,nodead][] Vampiric Touch",
+        detail = "Shadow Priest · DoT", score = 80,
+        source = "Community template", note = "Applies Vampiric Touch to a hostile mouseover or your target.",
+    },
+    {
+        name = "Devouring Plague", class = "PRIEST", icon = "Interface\\Icons\\Spell_Shadow_DevouringPlague",
+        body = "#showtooltip Devouring Plague\n/cast [harm,nodead] Devouring Plague",
+        detail = "Shadow Priest · Core", score = 70,
+        source = "Community template", note = "A compact Devouring Plague button for Shadow Priests.",
+    },
 }
 
 local frame, mainArea, settingsPage, listPane, editorPane, rows, statusText
@@ -270,7 +288,7 @@ end
 local function BuildIconPicker()
     if iconPopup then return end
     iconPopup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-    iconPopup:SetSize(420, 330)
+    iconPopup:SetSize(420, 350)
     iconPopup:SetFrameStrata("DIALOG")
     iconPopup:SetClampedToScreen(true)
     RegisterBackdrop(iconPopup, "panel")
@@ -310,8 +328,14 @@ local function BuildIconPicker()
         RefreshIconPicker()
     end)
     local close = Button(iconPopup, "Close", 70, 26)
-    close:SetPoint("BOTTOMRIGHT", -14, 12)
+    close:SetPoint("TOPRIGHT", -12, -10)
     close:SetScript("OnClick", function() iconPopup:Hide() end)
+    iconPopup:EnableMouseWheel(true)
+    iconPopup:SetScript("OnMouseWheel", function(_, delta)
+        local pages = math.max(1, math.ceil(#iconChoices / 80))
+        iconPage = math.max(1, math.min(pages, iconPage + (delta > 0 and -1 or 1)))
+        RefreshIconPicker()
+    end)
 end
 
 local function RefreshIconPicker()
@@ -389,13 +413,18 @@ local function RecordsForSource()
     if activeSource == "account" then return AccountRecords() end
     if activeSource == "character" then return CharacterRecords() end
     local result = {}
+    local playerClass = UnitClass and select(2, UnitClass("player")) or nil
     for _, item in ipairs(INTERNET_MACROS) do
         local copy = {}
         for key, value in pairs(item) do copy[key] = value end
         copy.kind = "internet"
+        copy.classMatch = copy.class == nil or copy.class == playerClass
         result[#result + 1] = copy
     end
-    table.sort(result, function(a, b) return a.score > b.score end)
+    table.sort(result, function(a, b)
+        if a.classMatch ~= b.classMatch then return a.classMatch end
+        return a.score > b.score
+    end)
     return result
 end
 
@@ -542,8 +571,8 @@ end
 
 local function BuildUI()
     frame = CreateFrame("Frame", "RevathsMacroFrame", UIParent, "BackdropTemplate")
-    local savedWidth = math.max(820, math.min(1180, tonumber(ns.db.window.width) or 980))
-    local savedHeight = math.max(640, math.min(760, tonumber(ns.db.window.height) or 640))
+    local savedWidth = math.max(820, tonumber(ns.db.window.width) or 980)
+    local savedHeight = math.max(640, tonumber(ns.db.window.height) or 640)
     frame:SetSize(savedWidth, savedHeight)
     if ns.db.window.x and ns.db.window.y then
         frame:SetPoint(ns.db.window.point or "CENTER", UIParent, ns.db.window.relativePoint or "CENTER", ns.db.window.x, ns.db.window.y)
@@ -551,7 +580,7 @@ local function BuildUI()
         frame:SetPoint("CENTER")
     end
     frame:SetFrameStrata("HIGH"); frame:SetClampedToScreen(true); frame:SetMovable(true); frame:SetResizable(true)
-    if frame.SetResizeBounds then frame:SetResizeBounds(820, 640, 1180, 760) end
+    if frame.SetResizeBounds then frame:SetResizeBounds(820, 640, 2400, 1800) end
     frame:EnableMouse(true); frame:RegisterForDrag("LeftButton"); frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
@@ -639,9 +668,12 @@ local function BuildUI()
     local characterSave = Button(editorPane, "Save to Character", 142, 31); characterSave:SetPoint("BOTTOMRIGHT", -12, 18); characterSave:SetScript("OnClick", function() SaveMacro(true) end)
     statusText = Text(editorPane, 10, "muted"); statusText:SetPoint("BOTTOMLEFT", newButton, "BOTTOMRIGHT", 12, 10); statusText:SetPoint("RIGHT", accountSave, "LEFT", -10, 0); statusText:SetWordWrap(false)
 
-    local resize = Button(frame, "↘", 28, 28); resize:SetPoint("BOTTOMRIGHT", -2, 2); resize.label:SetFont(STANDARD_TEXT_FONT, 16, "")
-    resize:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(Color("accent")); GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Resize window"); GameTooltip:Show() end)
-    resize:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(Color(self.selected and "accent" or "border")); GameTooltip:Hide() end)
+    local resize = CreateFrame("Button", nil, frame)
+    resize:SetSize(20, 20); resize:SetPoint("BOTTOMRIGHT", -2, 2); resize:SetFrameLevel(frame:GetFrameLevel() + 3)
+    resize.label = resize:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    resize.label:SetPoint("CENTER", 1, -1); resize.label:SetFont(STANDARD_TEXT_FONT, 16, "OUTLINE"); resize.label:SetTextColor(Color("accent")); resize.label:SetText("◢")
+    resize:SetScript("OnEnter", function(self) self.label:SetTextColor(Color("accent2")); GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Resize window"); GameTooltip:Show() end)
+    resize:SetScript("OnLeave", function(self) self.label:SetTextColor(Color("accent")); GameTooltip:Hide() end)
     resize:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
     resize:SetScript("OnMouseUp", function() frame:StopMovingOrSizing(); ns.db.window.width, ns.db.window.height = frame:GetWidth(), frame:GetHeight() end)
     BuildSettings(); table.insert(UISpecialFrames, frame:GetName()); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
