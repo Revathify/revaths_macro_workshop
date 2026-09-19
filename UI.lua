@@ -44,7 +44,7 @@ local COLORS = {
 
 local CLASSIC_COLORS = {
     background = { 0.030, 0.024, 0.014 }, panel = { 0.040, 0.030, 0.016 },
-    panelAlt = { 0.090, 0.055, 0.022 }, input = { 0.025, 0.018, 0.009 }, parchment = { 0.76, 0.48, 0.20 },
+    panelAlt = { 0.090, 0.055, 0.022 }, input = { 0.025, 0.018, 0.009 }, parchment = { 0.055, 0.040, 0.022 },
     border = { 0.58, 0.48, 0.30 }, accent = { 0.96, 0.72, 0.20 },
     accent2 = { 0.98, 0.83, 0.43 }, text = { 1.00, 0.92, 0.72 },
     muted = { 0.76, 0.64, 0.43 }, danger = { 0.96, 0.35, 0.24 },
@@ -257,13 +257,27 @@ local function ApplyFrameBackdrop(object)
         if role == "parchment" then
             object.classicTexture:SetTexture("Interface\\QuestFrame\\QuestBG")
             object.classicTexture:SetTexCoord(0, 0.5859375, 0, 0.65625)
-            object.classicTexture:SetVertexColor(1, 0.94, 0.78, 0.88)
+            object.classicTexture:SetVertexColor(0.12, 0.105, 0.085, 0.96)
         else
             object.classicTexture:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
             object.classicTexture:SetTexCoord(0, 1, 0, 1)
             object.classicTexture:SetVertexColor(0.40, 0.32, 0.20, 0.44)
         end
         object.classicTexture:Show()
+    elseif classic and object.isMacroRow then
+        object:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        if object:GetNormalTexture() then object:GetNormalTexture():SetTexture(nil) end
+        if object:GetPushedTexture() then object:GetPushedTexture():SetTexture(nil) end
+        if object:GetHighlightTexture() then object:GetHighlightTexture():SetTexture(nil) end
+        if object.classicTexture then object.classicTexture:Hide() end
+        object:SetBackdropColor(Color("panelAlt"))
+        object:SetBackdropBorderColor(Color(object.selected and "accent" or "border"))
+        return
     elseif classic and object.isWorkshopButton then
         object:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
         object:SetNormalTexture("Interface\\Buttons\\UI-Panel-Button-Up")
@@ -383,7 +397,7 @@ local function ApplyAppearance()
         end
     end
     if editorFontValue and ns.db then editorFontValue:SetText(string.format("%d px", tonumber(ns.db.fontSize) or 13)) end
-    if macroBody then macroBody:SetTextColor(Color(ns.db and ns.db.skin == "classic" and "ink" or "text")) end
+    if macroBody then macroBody:SetTextColor(Color("text")) end
     if headerLine then headerLine:SetColorTexture(Color("accent")) end
     if modernSkinButton and classicSkinButton and ns.db then
         modernSkinButton.selected = ns.db.skin ~= "classic"
@@ -596,6 +610,7 @@ local function RefreshRows()
         local row = rowButtons[slot]
         if not row then
             row = Button(rows, "", 228, 44)
+            row.isMacroRow = true; ApplyFrameBackdrop(row)
             row.icon = row:CreateTexture(nil, "ARTWORK")
             row.icon:SetSize(32, 32); row.icon:SetPoint("LEFT", 6, 0); row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
             row.label:ClearAllPoints(); row.label:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, -1); row.label:SetPoint("RIGHT", -6, 0); row.label:SetHeight(18); row.label:SetJustifyH("LEFT"); row.label:SetWordWrap(false); row.label:SetNonSpaceWrap(false)
@@ -700,6 +715,22 @@ local function BuildSettings()
     classicSkinButton = Button(settingsPage, "Classic", 145, 34); classicSkinButton:SetPoint("LEFT", modernSkinButton, "RIGHT", 10, 0)
     modernSkinButton:SetScript("OnClick", function() ns.db.skin = "modern"; ApplyAppearance(); settingsPage:Refresh() end)
     classicSkinButton:SetScript("OnClick", function() ns.db.skin = "classic"; ApplyAppearance(); settingsPage:Refresh() end)
+    local paletteTitle = Text(settingsPage, 11, "muted"); paletteTitle:SetPoint("TOPLEFT", 360, -82); paletteTitle:SetText("MODERN COLOR PALETTE")
+    local paletteButton = Button(settingsPage, "", 280, 34); paletteButton:SetPoint("TOPLEFT", 360, -103)
+    local paletteMenu = CreateFrame("Frame", nil, settingsPage, "BackdropTemplate")
+    paletteMenu:SetSize(304, 220); paletteMenu:SetFrameLevel(settingsPage:GetFrameLevel() + 20); paletteMenu:SetClampedToScreen(true); RegisterBackdrop(paletteMenu, "panel"); paletteMenu:Hide()
+    local paletteMenuTitle = Text(paletteMenu, 11, "muted"); paletteMenuTitle:SetPoint("TOPLEFT", 12, -10); paletteMenuTitle:SetText("SELECT COLOR PALETTE")
+    local paletteOrder = { "midnight", "arcane", "emerald", "crimson", "royal", "graphite" }
+    for index, key in ipairs(paletteOrder) do
+        local option = PALETTES[key]
+        local choice = Button(paletteMenu, option.label, 280, 27); choice:SetPoint("TOPLEFT", 12, -31 - (index - 1) * 29)
+        choice:SetScript("OnClick", function()
+            ns.db.palette = key; paletteMenu:Hide(); ApplyAppearance(); settingsPage:Refresh()
+        end)
+    end
+    paletteButton:SetScript("OnClick", function()
+        paletteMenu:ClearAllPoints(); paletteMenu:SetPoint("TOPLEFT", paletteButton, "BOTTOMLEFT", 0, -6); paletteMenu:SetShown(not paletteMenu:IsShown())
+    end)
     DiscoverSharedMediaFonts()
     local fontTitle = Text(settingsPage, 11, "muted"); fontTitle:SetPoint("TOPLEFT", 28, -165); fontTitle:SetText("ADDON FONT")
     local fontButton = Button(settingsPage, "", 300, 34); fontButton:SetPoint("TOPLEFT", 28, -186)
@@ -748,6 +779,8 @@ local function BuildSettings()
     local version = Text(settingsPage, 11, "muted", "RIGHT"); version:SetPoint("BOTTOMRIGHT", -28, 31); version:SetText("Revath's Macro Workshop  ·  " .. tostring(ns.version))
     function settingsPage:Refresh()
         settingsRefreshing = true
+        local palette = PALETTES[ns.db.palette] or PALETTES.midnight
+        paletteButton.label:SetText(palette.label .. "  ▾")
         fontButton.label:SetText(SelectedFont().label .. "  ▾"); opacity:SetValue(ns.db.opacity); RefreshFontMenu()
         settingsRefreshing = false; ApplyAppearance()
     end
