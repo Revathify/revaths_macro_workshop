@@ -679,7 +679,8 @@ local function BuildUI()
     fontMinus:SetScript("OnClick", function() ChangeEditorFontSize(-1) end); fontPlus:SetScript("OnClick", function() ChangeEditorFontSize(1) end)
     macroBody = Edit(editorPane, true); macroBody:SetPoint("TOPLEFT", bodyLabel, "BOTTOMLEFT", 0, -6); macroBody:SetPoint("BOTTOMRIGHT", -20, 139); macroBody:SetMaxLetters(255)
     local suggestionPopup = CreateFrame("Frame", nil, editorPane, "BackdropTemplate"); suggestionPopup:SetSize(370, 224); suggestionPopup:SetFrameLevel(editorPane:GetFrameLevel() + 10); RegisterBackdrop(suggestionPopup, "panel"); suggestionPopup:Hide()
-    local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("SYNTAX SUGGESTIONS  ·  TAB TO ACCEPT")
+    local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("SYNTAX SUGGESTIONS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+    local caretMeasure = macroBody:CreateFontString(nil, "OVERLAY"); caretMeasure:SetAlpha(0); caretMeasure:SetPoint("TOPLEFT", macroBody, "TOPLEFT")
     local commandCatalog = {
         { "/cast ", "Cast a spell" }, { "/castsequence ", "Cast spells in sequence" }, { "/castrandom ", "Cast one listed spell" },
         { "/use ", "Use an item or spell" }, { "/userandom ", "Use one listed item" }, { "/stopcasting", "Stop the current cast" },
@@ -832,13 +833,13 @@ local function BuildUI()
             local token = line:sub(tokenStart):match("^%s*(.-)%s*$") or ""
             replaceStart, replaceEnd = lineStart + tokenStart - 1, cursor
             AddMatches(conditionalCatalog, token)
-            suggestionTitle:SetText("MACRO CONDITIONS  ·  TAB TO ACCEPT")
+            suggestionTitle:SetText("MACRO CONDITIONS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
         else
             local commandOnly = line:match("^%s*([/#][%w]*)$")
             if commandOnly then
                 replaceStart, replaceEnd = lineStart + (line:find("[/#]") or 1) - 1, cursor
                 AddMatches(commandCatalog, commandOnly)
-                suggestionTitle:SetText("MACRO COMMANDS  ·  TAB TO ACCEPT")
+                suggestionTitle:SetText("MACRO COMMANDS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
             else
                 local command, arguments = line:match("^%s*([/#][%w]+)%s+(.*)$")
                 local commandLower = command and command:lower()
@@ -848,7 +849,7 @@ local function BuildUI()
                     local prefix = arguments:match("^%s*(.-)%s*$") or ""
                     replaceStart, replaceEnd = cursor - #arguments + (arguments:find("%S") or (#arguments + 1)), cursor
                     AddMatches(consoleNames, prefix)
-                    suggestionTitle:SetText("CONSOLE COMMANDS & CVARS  ·  TAB TO ACCEPT")
+                    suggestionTitle:SetText("CONSOLE COMMANDS & CVARS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                 elseif command and spellCommands[commandLower] then
                     BuildSpellNames()
                     if commandLower == "/use" or commandLower == "/userandom" then BuildItemNames() end
@@ -861,12 +862,12 @@ local function BuildUI()
                     local wantsReset = commandLower == "/castsequence" and (prefix == "" or string.sub("reset=", 1, #prefix):lower() == prefix:lower())
                     if wantsReset then
                         AddMatches(resetCatalog, prefix)
-                        suggestionTitle:SetText("SEQUENCE RESET  ·  TAB TO ACCEPT")
+                        suggestionTitle:SetText("SEQUENCE RESET  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                     else
                         local supportsConditions = commandLower == "/cast" or commandLower == "/use" or commandLower == "/castsequence" or commandLower == "/castrandom" or commandLower == "/userandom"
                         if supportsConditions and (prefix == "" or prefix:sub(1, 1) == "@" or prefix:sub(1, 1) == "(") then
                             AddMatches(conditionalTemplateCatalog, "", 6)
-                            suggestionTitle:SetText("CONDITIONAL TEMPLATES  ·  TAB TO ACCEPT")
+                            suggestionTitle:SetText("CONDITIONAL TEMPLATES  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                         end
                         for _, name in ipairs(spellNames) do
                             if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
@@ -881,22 +882,42 @@ local function BuildUI()
                             end
                         end
                     end
-                    if not wantsReset and #matches == 0 then suggestionTitle:SetText("KNOWN SPELLS  ·  TAB TO ACCEPT") end
+                    if not wantsReset and #matches == 0 then suggestionTitle:SetText("KNOWN SPELLS  ·  TAB TO SELECT  ·  ENTER TO INSERT") end
                 end
             end
         end
         if #matches == 0 then suggestionPopup:Hide(); return end
-        suggestionPopup:ClearAllPoints(); suggestionPopup:SetPoint("TOPLEFT", macroBody, "TOPLEFT", 12, -6); suggestionPopup:Show(); PaintSuggestions()
+        local currentLine = before:match("([^\n]*)$") or ""
+        local fontPath, fontSize, fontFlags = macroBody:GetFont()
+        caretMeasure:SetFont(fontPath or STANDARD_TEXT_FONT, fontSize or 13, fontFlags or ""); caretMeasure:SetText(currentLine)
+        local innerWidth = math.max(1, (macroBody:GetWidth() or 400) - 20)
+        local textWidth = caretMeasure:GetStringWidth() or 0
+        local wrappedLines = math.floor(textWidth / innerWidth)
+        local visualLine = select(2, before:gsub("\n", "")) + wrappedLines
+        local x = 10 + (textWidth % innerWidth)
+        local y = 8 + (visualLine + 1) * ((fontSize or 13) + 4)
+        x = math.min(x, math.max(8, (macroBody:GetWidth() or 400) - suggestionPopup:GetWidth() - 8))
+        y = math.min(y, math.max(8, (macroBody:GetHeight() or 300) + 130 - suggestionPopup:GetHeight()))
+        suggestionPopup:ClearAllPoints(); suggestionPopup:SetPoint("TOPLEFT", macroBody, "TOPLEFT", x, -y); suggestionPopup:Show(); PaintSuggestions()
     end
     macroBody:SetScript("OnTextChanged", function(self, userInput)
         local text = self:GetText() or ""; local problem = ValidateMacro(text)
         bodyLabel:SetText(string.format("MACRO BODY  %d / 255%s", string.len(text), problem and ("  ·  " .. problem) or "")); bodyLabel:SetTextColor(Color(problem and "danger" or "muted"))
         if userInput then UpdateSuggestions() end
     end)
-    macroBody:SetScript("OnTabPressed", function() AcceptSuggestion() end)
+    macroBody:SetScript("OnTabPressed", function()
+        if not suggestionPopup:IsShown() or #matches == 0 then return end
+        local delta = IsShiftKeyDown and IsShiftKeyDown() and -1 or 1
+        selectedSuggestion = ((selectedSuggestion - 1 + delta) % #matches) + 1
+        PaintSuggestions()
+    end)
+    macroBody:SetScript("OnEnterPressed", function(self)
+        if suggestionPopup:IsShown() and #matches > 0 then AcceptSuggestion(); return end
+        self:Insert("\n")
+    end)
     macroBody:SetScript("OnArrowPressed", function(_, key)
         if not suggestionPopup:IsShown() or #matches == 0 then return end
-        selectedSuggestion = math.max(1, math.min(#matches, selectedSuggestion + (key == "DOWN" and 1 or -1))); PaintSuggestions()
+        selectedSuggestion = ((selectedSuggestion - 1 + (key == "DOWN" and 1 or -1)) % #matches) + 1; PaintSuggestions()
     end)
     macroName:SetScript("OnEscapePressed", function() macroName:ClearFocus() end)
     macroBody:SetScript("OnEscapePressed", function() macroBody:ClearFocus() end)
