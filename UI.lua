@@ -121,7 +121,7 @@ local INTERNET_MACROS = {
 }
 
 local frame, mainArea, settingsPage, listPane, editorPane, rows, statusText
-local macroName, macroBody, bodyLabel, iconPreview, sourceBox, sourceLabel, noteText
+local macroName, macroBody, bodyLabel, iconPreview, sourceBox, sourceLabel, noteText, editorFontValue
 local rowButtons, tabs, styledFrames, styledText, fontObjects = {}, {}, {}, {}, {}
 local selectedRecord, selectedIcon, activeSource = nil, nil, "account"
 local settingsRefreshing = false
@@ -210,7 +210,14 @@ local function ApplyAppearance()
             if not ok or loaded == false then object:SetFont(STANDARD_TEXT_FONT, size, "") end
         end
     end
+    if editorFontValue and ns.db then editorFontValue:SetText(string.format("%d px", tonumber(ns.db.fontSize) or 13)) end
     if frame and not scaleDragging then frame:SetScale(ns.db and ns.db.scale or 1) end
+end
+
+local function ChangeEditorFontSize(delta)
+    if not ns.db then return end
+    ns.db.fontSize = math.max(10, math.min(24, (tonumber(ns.db.fontSize) or 13) + delta))
+    ApplyAppearance()
 end
 
 local function PreserveWindowCenterAtScale(value)
@@ -478,80 +485,56 @@ local function BuildSettings()
     settingsPage = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     settingsPage:SetPoint("TOPLEFT", 22, -108); settingsPage:SetPoint("BOTTOMRIGHT", -22, 24); RegisterBackdrop(settingsPage, "panel")
     local title = Text(settingsPage, 19, "text"); title:SetPoint("TOPLEFT", 24, -22); title:SetText("Appearance settings")
-    local hint = Text(settingsPage, 11, "muted"); hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7); hint:SetText("Changes are saved account-wide and applied immediately.")
-    local paletteTitle = Text(settingsPage, 11, "muted"); paletteTitle:SetPoint("TOPLEFT", 28, -84); paletteTitle:SetText("COLOR PALETTE")
-    local paletteButtons = {}
-    local paletteOrder = { "midnight", "arcane", "emerald", "crimson", "royal", "graphite" }
-    for index, key in ipairs(paletteOrder) do
-        local column = (index - 1) % 3
-        local row = math.floor((index - 1) / 3)
-        local button = Button(settingsPage, PALETTES[key].label, 170, 30)
-        button:SetPoint("TOPLEFT", 28 + column * 184, -105 - row * 36)
-        button:SetScript("OnClick", function()
-            ns.db.palette = key
-            for name, item in pairs(paletteButtons) do item.selected = name == key end
-            ApplyAppearance()
-        end)
-        paletteButtons[key] = button
-    end
+    local hint = Text(settingsPage, 11, "muted"); hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7); hint:SetText("Choose a font and adjust transparency. Resize the window from its lower-right corner.")
     DiscoverSharedMediaFonts()
-    local fontTitle = Text(settingsPage, 11, "muted"); fontTitle:SetPoint("TOPLEFT", 28, -184); fontTitle:SetText("ADDON FONT")
-    local fontButton = Button(settingsPage, "", 260, 34); fontButton:SetPoint("TOPLEFT", 28, -205)
-    fontButton:SetScript("OnClick", function()
+    local fontTitle = Text(settingsPage, 11, "muted"); fontTitle:SetPoint("TOPLEFT", 28, -92); fontTitle:SetText("ADDON FONT")
+    local fontButton = Button(settingsPage, "", 300, 34); fontButton:SetPoint("TOPLEFT", 28, -113)
+    local fontMenu = CreateFrame("Frame", nil, settingsPage, "BackdropTemplate")
+    fontMenu:SetSize(360, 250); fontMenu:SetFrameLevel(settingsPage:GetFrameLevel() + 20); fontMenu:SetClampedToScreen(true); RegisterBackdrop(fontMenu, "panel"); fontMenu:Hide()
+    local fontMenuTitle = Text(fontMenu, 11, "muted"); fontMenuTitle:SetPoint("TOPLEFT", 12, -10); fontMenuTitle:SetText("SELECT FONT")
+    local fontMenuButtons = {}
+    for index = 1, 10 do
+        local button = Button(fontMenu, "", 160, 29)
+        local column = (index - 1) % 2; local row = math.floor((index - 1) / 2)
+        button:SetPoint("TOPLEFT", 12 + column * 172, -30 - row * 34)
+        fontMenuButtons[index] = button
+    end
+    local fontPrev = Button(fontMenu, "‹", 28, 24); fontPrev:SetPoint("BOTTOMLEFT", 12, 10)
+    local fontPage = Text(fontMenu, 10, "muted", "CENTER"); fontPage:SetPoint("BOTTOM", 0, 15); fontPage:SetWidth(80)
+    local fontNext = Button(fontMenu, "›", 28, 24); fontNext:SetPoint("BOTTOMRIGHT", -12, 10)
+    local fontMenuPage = 1
+    local function RefreshFontMenu()
         DiscoverSharedMediaFonts()
-        local current = 1
-        for index, option in ipairs(FONTS) do if option.key == ns.db.font then current = index end end
-        local selected = FONTS[(current % #FONTS) + 1]
-        ns.db.font = selected.key; fontButton.label:SetText(selected.label .. "  ›"); ApplyAppearance()
+        local pages = math.max(1, math.ceil(#FONTS / 10)); fontMenuPage = math.max(1, math.min(fontMenuPage, pages)); fontPage:SetText(string.format("%d / %d", fontMenuPage, pages))
+        local start = (fontMenuPage - 1) * 10
+        for index, button in ipairs(fontMenuButtons) do
+            local option = FONTS[start + index]
+            button:SetShown(option ~= nil)
+            if option then
+                button.label:SetText(option.label .. (option.key == ns.db.font and "  ✓" or ""))
+                button.label:SetFont(option.path, 11, option.flags or "")
+                button:SetScript("OnClick", function()
+                    ns.db.font = option.key; fontMenu:Hide(); settingsPage:Refresh(); ApplyAppearance()
+                end)
+            end
+        end
+        fontPrev:SetEnabled(fontMenuPage > 1); fontNext:SetEnabled(fontMenuPage < pages)
+    end
+    fontPrev:SetScript("OnClick", function() fontMenuPage = fontMenuPage - 1; RefreshFontMenu() end)
+    fontNext:SetScript("OnClick", function() fontMenuPage = fontMenuPage + 1; RefreshFontMenu() end)
+    fontButton:SetScript("OnClick", function()
+        RefreshFontMenu(); fontMenu:ClearAllPoints(); fontMenu:SetPoint("TOPLEFT", fontButton, "BOTTOMLEFT", 0, -6); fontMenu:Show()
     end)
-    local compact = CreateFrame("CheckButton", nil, settingsPage, "UICheckButtonTemplate")
-    compact:SetPoint("TOPLEFT", 330, -202); compact:SetSize(28, 28)
-    local compactLabel = Text(settingsPage, 12, "text"); compactLabel:SetPoint("LEFT", compact, "RIGHT", 7, 0); compactLabel:SetText("Compact macro rows")
-    compact:SetScript("OnClick", function(self) ns.db.compactRows = self:GetChecked() == true; RefreshRows() end)
 
-    local opacity, opacityValue = Slider(settingsPage, "WINDOW OPACITY", -270, 0.55, 1, 0.05)
-    local scale, scaleValue = Slider(settingsPage, "WINDOW SCALE", -345, 0.65, 1.10, 0.05)
-    local editorSize, editorSizeValue = Slider(settingsPage, "EDITOR FONT SIZE", -400, 10, 24, 1)
+    local opacity, opacityValue = Slider(settingsPage, "WINDOW OPACITY", -190, 0.55, 1, 0.05)
     opacity:SetScript("OnValueChanged", function(_, value)
         value = math.floor(value * 20 + 0.5) / 20; opacityValue:SetText(string.format("%d%%", value * 100))
         if not settingsRefreshing then ns.db.opacity = value; ApplyAppearance() end
     end)
-    scale:SetScript("OnMouseDown", function() scaleDragging = true end)
-    scale:SetScript("OnMouseUp", function()
-        scaleDragging = false
-        CommitWindowScale()
-    end)
-    scale:SetScript("OnValueChanged", function(_, value)
-        value = math.floor(value * 20 + 0.5) / 20; scaleValue:SetText(string.format("%d%%", value * 100))
-        if settingsRefreshing or not ns.db then return end
-        pendingScale = value
-        if scaleDragging then return end
-        scaleCommitToken = (scaleCommitToken or 0) + 1
-        local token = scaleCommitToken
-        if C_Timer and C_Timer.After then
-            C_Timer.After(0.2, function()
-                if token == scaleCommitToken and not scaleDragging then CommitWindowScale() end
-            end)
-        else
-            CommitWindowScale()
-        end
-    end)
-    editorSize:SetScript("OnValueChanged", function(_, value)
-        value = math.floor(value + 0.5); editorSizeValue:SetText(tostring(value) .. " px")
-        if not settingsRefreshing then ns.db.fontSize = value; ApplyAppearance() end
-    end)
-    local reset = Button(settingsPage, "Reset appearance", 150, 30); reset:SetPoint("BOTTOMLEFT", 28, 24)
-    reset:SetScript("OnClick", function()
-        ns.db.palette, ns.db.font, ns.db.opacity, ns.db.scale, ns.db.fontSize, ns.db.compactRows = "midnight", "friz", 0.97, 1, 13, false
-        pendingScale = nil
-        settingsPage:Refresh(); ApplyAppearance(); RefreshRows(); SetStatus("Appearance reset to defaults.")
-    end)
     local version = Text(settingsPage, 11, "muted", "RIGHT"); version:SetPoint("BOTTOMRIGHT", -28, 31); version:SetText("Revath's Macro Workshop  ·  " .. tostring(ns.version))
     function settingsPage:Refresh()
         settingsRefreshing = true
-        fontButton.label:SetText(SelectedFont().label .. "  ›"); compact:SetChecked(ns.db.compactRows)
-        opacity:SetValue(ns.db.opacity); scale:SetValue(ns.db.scale); editorSize:SetValue(ns.db.fontSize)
-        for key, button in pairs(paletteButtons) do button.selected = ns.db.palette == key end
+        fontButton.label:SetText(SelectedFont().label .. "  ▾"); opacity:SetValue(ns.db.opacity); RefreshFontMenu()
         settingsRefreshing = false; ApplyAppearance()
     end
     settingsPage:Hide()
@@ -608,13 +591,44 @@ local function BuildUI()
     local editorHint = Text(editorPane, 11, "muted"); editorHint:SetPoint("TOPLEFT", editorTitle, "BOTTOMLEFT", 0, -6); editorHint:SetText("Edit a macro or adapt a community template.")
     iconPreview = editorPane:CreateTexture(nil, "ARTWORK"); iconPreview:SetSize(42, 42); iconPreview:SetPoint("TOPRIGHT", -20, -18); iconPreview:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     local iconButton = Button(editorPane, "Change icon", 96, 25)
-    iconButton:SetPoint("TOPRIGHT", -68, -66)
+    iconButton:SetPoint("TOPRIGHT", -20, -66)
     iconButton:SetScript("OnClick", ShowIconPicker)
     local nameLabel = Text(editorPane, 11, "muted"); nameLabel:SetPoint("TOPLEFT", 20, -70); nameLabel:SetText("MACRO NAME")
-    macroName = Edit(editorPane); macroName:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -6); macroName:SetPoint("RIGHT", -20, 0); macroName:SetHeight(35); macroName:SetMaxLetters(16)
+    macroName = Edit(editorPane); macroName:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -6); macroName:SetPoint("RIGHT", iconButton, "LEFT", -12, 0); macroName:SetHeight(35); macroName:SetMaxLetters(16)
     bodyLabel = Text(editorPane, 11, "muted"); bodyLabel:SetPoint("TOPLEFT", 20, -128); bodyLabel:SetText("MACRO BODY")
+    local fontMinus = Button(editorPane, "−", 27, 23); fontMinus:SetPoint("TOPRIGHT", -57, -111)
+    editorFontValue = Text(editorPane, 10, "accent2", "RIGHT"); editorFontValue:SetPoint("RIGHT", fontMinus, "LEFT", -7, 0); editorFontValue:SetWidth(40)
+    local fontPlus = Button(editorPane, "+", 27, 23); fontPlus:SetPoint("TOPRIGHT", -20, -111)
+    fontMinus:SetScript("OnClick", function() ChangeEditorFontSize(-1) end); fontPlus:SetScript("OnClick", function() ChangeEditorFontSize(1) end)
     macroBody = Edit(editorPane, true); macroBody:SetPoint("TOPLEFT", bodyLabel, "BOTTOMLEFT", 0, -6); macroBody:SetPoint("BOTTOMRIGHT", -20, 139); macroBody:SetMaxLetters(255)
-    macroBody:SetScript("OnTextChanged", function(self) bodyLabel:SetText(string.format("MACRO BODY  %d / 255", string.len(self:GetText() or ""))) end)
+    local suggestionPopup = CreateFrame("Frame", nil, editorPane, "BackdropTemplate"); suggestionPopup:SetSize(240, 190); suggestionPopup:SetFrameLevel(editorPane:GetFrameLevel() + 10); RegisterBackdrop(suggestionPopup, "panel"); suggestionPopup:Hide()
+    local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("MACRO COMMANDS")
+    local macroCommands = { "/cast ", "/use ", "/target ", "/focus ", "/assist ", "/mouseover ", "/stopcasting", "/cancelaura ", "/startattack", "/dismount", "/run ", "/click " }
+    local suggestionButtons = {}
+    for index = 1, 8 do
+        local button = Button(suggestionPopup, "", 218, 18); button:SetPoint("TOPLEFT", 10, -24 - (index - 1) * 20); suggestionButtons[index] = button
+    end
+    local function UpdateSuggestions()
+        local text = macroBody:GetText() or ""; local line = text:match("([^\n]*)$") or ""; local partial = line:match("^%s*(/[%w]*)")
+        if not partial or #partial < 1 then suggestionPopup:Hide(); return end
+        local matches = {}; for _, command in ipairs(macroCommands) do if command:sub(1, #partial):lower() == partial:lower() then matches[#matches + 1] = command end end
+        if #matches == 0 then suggestionPopup:Hide(); return end
+        suggestionPopup:ClearAllPoints(); suggestionPopup:SetPoint("TOPLEFT", macroBody, "TOPLEFT", 12, -6); suggestionPopup:Show()
+        for index, button in ipairs(suggestionButtons) do
+            local command = matches[index]; button:SetShown(command ~= nil)
+            if command then
+                button.label:SetText(command); button:SetScript("OnClick", function()
+                    local prefix = text:sub(1, #text - #line); macroBody:SetText(prefix .. command); macroBody:SetCursorPosition(#prefix + #command); suggestionPopup:Hide()
+                end)
+            end
+        end
+    end
+    macroBody:SetScript("OnTextChanged", function(self, userInput)
+        bodyLabel:SetText(string.format("MACRO BODY  %d / 255", string.len(self:GetText() or "")))
+        if userInput then UpdateSuggestions() end
+    end)
+    macroName:SetScript("OnEscapePressed", function() macroName:ClearFocus(); frame:Hide() end)
+    macroBody:SetScript("OnEscapePressed", function() macroBody:ClearFocus(); frame:Hide() end)
     sourceLabel = Text(editorPane, 10, "muted"); sourceLabel:SetPoint("BOTTOMLEFT", 20, 104); sourceLabel:SetText("SOURCE")
     sourceBox = Edit(editorPane); sourceBox:SetPoint("LEFT", sourceLabel, "RIGHT", 10, 0); sourceBox:SetPoint("RIGHT", -20, 0); sourceBox:SetHeight(27)
     sourceBox:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
@@ -625,7 +639,9 @@ local function BuildUI()
     local characterSave = Button(editorPane, "Save to Character", 142, 31); characterSave:SetPoint("BOTTOMRIGHT", -12, 18); characterSave:SetScript("OnClick", function() SaveMacro(true) end)
     statusText = Text(editorPane, 10, "muted"); statusText:SetPoint("BOTTOMLEFT", newButton, "BOTTOMRIGHT", 12, 10); statusText:SetPoint("RIGHT", accountSave, "LEFT", -10, 0); statusText:SetWordWrap(false)
 
-    local resize = Button(frame, "◢", 24, 24); resize:SetPoint("BOTTOMRIGHT", -3, 3)
+    local resize = Button(frame, "↘", 28, 28); resize:SetPoint("BOTTOMRIGHT", -2, 2); resize.label:SetFont(STANDARD_TEXT_FONT, 16, "")
+    resize:SetScript("OnEnter", function(self) self:SetBackdropBorderColor(Color("accent")); GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Resize window"); GameTooltip:Show() end)
+    resize:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(Color(self.selected and "accent" or "border")); GameTooltip:Hide() end)
     resize:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
     resize:SetScript("OnMouseUp", function() frame:StopMovingOrSizing(); ns.db.window.width, ns.db.window.height = frame:GetWidth(), frame:GetHeight() end)
     BuildSettings(); table.insert(UISpecialFrames, frame:GetName()); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
