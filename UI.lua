@@ -683,8 +683,15 @@ local function BuildUI()
         reopenGameMenuOnHide = false
         if C_Timer and C_Timer.After then
             C_Timer.After(0, function()
-                if not frame:IsShown() and ToggleGameMenu then ToggleGameMenu() end
+                if frame:IsShown() then return end
+                if GameMenuFrame_Show then GameMenuFrame_Show()
+                elseif GameMenuFrame and ShowUIPanel then ShowUIPanel(GameMenuFrame)
+                elseif ToggleGameMenu then ToggleGameMenu() end
             end)
+        elseif GameMenuFrame_Show then
+            GameMenuFrame_Show()
+        elseif GameMenuFrame and ShowUIPanel then
+            ShowUIPanel(GameMenuFrame)
         elseif ToggleGameMenu then
             ToggleGameMenu()
         end
@@ -701,13 +708,16 @@ function ns:RedirectBlizzardMacroFrame()
         if self.redirectingMacroFrame then return end
         self.redirectingMacroFrame = true
         if MacroFrame then MacroFrame:Hide() end
-        if frame and not frame:IsShown() then
-            reopenGameMenuOnHide = true
-            ApplyAppearance()
-            SelectSource(activeSource)
-            frame:Show()
+        local function ShowReplacement()
+            if frame and not frame:IsShown() then
+                reopenGameMenuOnHide = true
+                ApplyAppearance()
+                SelectSource(activeSource)
+                frame:Show()
+            end
+            self.redirectingMacroFrame = nil
         end
-        self.redirectingMacroFrame = nil
+        if C_Timer and C_Timer.After then C_Timer.After(0, ShowReplacement) else ShowReplacement() end
     end
 
     local installed = false
