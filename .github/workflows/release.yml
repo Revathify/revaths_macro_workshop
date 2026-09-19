@@ -1,4 +1,4 @@
-name: Bump, package, and release addon
+name: Build and release Macro Workshop
 
 on:
   push:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   release:
-    name: Bump version and publish release
+    name: Bump version, build, and publish release
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

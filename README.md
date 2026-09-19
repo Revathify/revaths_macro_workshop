@@ -14,3 +14,7 @@ Copy the `RevathsMacro` folder into `_retail_/Interface/AddOns/` and reload the 
 - Use the font menu and size slider to customize the editor.
 
 Macro create/update calls use Blizzard's protected macro API and may be refused during combat. Importing and editing remain available.
+
+## Releases
+
+Every commit pushed to `main` automatically bumps the patch version, packages the `RevathsMacro` addon, uploads a workflow artifact, and publishes a GitHub release with the matching version tag.
