@@ -691,11 +691,13 @@ local function BuildUI()
         { "/petattack", "Order pet to attack" }, { "/petfollow", "Order pet to follow" }, { "/petassist", "Set pet to assist" }, { "/petdefensive", "Set pet defensive" }, { "/petpassive", "Set pet passive" },
         { "/equip ", "Equip an item" }, { "/equipslot ", "Equip into a slot" }, { "/equipset ", "Equip an equipment set" },
         { "/click ", "Click a secure button" }, { "/dismount", "Dismount" }, { "/run ", "Run Lua code" }, { "/script ", "Run Lua code" },
+        { "/console ", "Run a console command or set a CVar" },
         { "/say ", "Say a message" }, { "/party ", "Party message" }, { "/raid ", "Raid message" }, { "/instance ", "Instance message" }, { "/yell ", "Yell a message" }, { "/whisper ", "Whisper a player" },
         { "#showtooltip ", "Set action icon and tooltip" }, { "#show ", "Set action icon" },
     }
     local conditionalCatalog = {
         { "@player", "Your character" }, { "@target", "Current target" }, { "@focus", "Focus target" }, { "@mouseover", "Unit under cursor" }, { "@cursor", "Ground at cursor" }, { "@none", "Show targeting cursor" },
+        { "@pet", "Your pet" }, { "@targettarget", "Your target's target" }, { "@party1", "First party member" }, { "@party2", "Second party member" }, { "@arena1", "First arena opponent" },
         { "help", "Friendly target" }, { "harm", "Hostile target" }, { "exists", "Target exists" }, { "dead", "Target is dead" }, { "nodead", "Target is alive" },
         { "combat", "In combat" }, { "nocombat", "Out of combat" }, { "mod:shift", "Shift held" }, { "mod:ctrl", "Ctrl held" }, { "mod:alt", "Alt held" }, { "nomod", "No modifier held" },
         { "group", "In a group" }, { "group:party", "In a party" }, { "group:raid", "In a raid" }, { "party", "Target is in party" }, { "raid", "Target is in raid" },
@@ -703,7 +705,17 @@ local function BuildUI()
         { "button:", "Mouse button used" }, { "actionbar:", "Current action bar page" }, { "bonusbar:", "Current bonus bar" }, { "equipped:", "Item type equipped" },
         { "pet", "Pet exists" }, { "nopet", "No pet" }, { "vehicleui", "Vehicle UI active" }, { "overridebar", "Override bar active" }, { "possessbar", "Possess bar active" },
     }
-    local commandLookup, spellNames, itemNames = {}, {}, { "13", "14", "Healthstone" }
+    local conditionalTemplateCatalog = {
+        { "[@target] ", "Cast on your current target" },
+        { "[@mouseover,help,nodead][] ", "Friendly mouseover, otherwise normal target" },
+        { "[@focus,help,nodead][] ", "Friendly focus, otherwise normal target" },
+        { "[@target,harm,nodead][] ", "Living hostile target, otherwise fallback" },
+        { "[@player] ", "Always cast on yourself" },
+        { "[mod:shift,@player][] ", "Self-cast with Shift, otherwise normal target" },
+        { "[@cursor] ", "Place a ground spell at the cursor" },
+        { "[@none] ", "Open the ground-targeting cursor" },
+    }
+    local commandLookup, spellNames, itemNames, consoleNames = {}, {}, { "13", "14", "Healthstone" }, {}
     for _, entry in ipairs(commandCatalog) do commandLookup[(entry[1]:match("^(%S+)") or entry[1]):lower()] = true end
     local function BuildSpellNames()
         if #spellNames > 0 then return end
@@ -740,6 +752,31 @@ local function BuildUI()
             end
         end
         table.sort(itemNames)
+    end
+    local function BuildConsoleNames()
+        if #consoleNames > 0 then return end
+        local seen = {}
+        local getter = ConsoleGetAllCommands or (C_Console and C_Console.GetAllCommands)
+        local commands = getter and getter() or nil
+        if commands then
+            for _, info in pairs(commands) do
+                local name = info and info.command
+                if name and name ~= "" and not seen[name:lower()] then
+                    seen[name:lower()] = true
+                    local detail = info.help
+                    if not detail or detail == "" then detail = "Console command or CVar" end
+                    consoleNames[#consoleNames + 1] = { name, detail }
+                end
+            end
+        end
+        if #consoleNames == 0 then
+            consoleNames = {
+                { "reloadui", "Reload the user interface" }, { "gxrestart", "Restart the graphics engine" },
+                { "cvar_default ", "Restore a CVar to its default" }, { "cvar_reset ", "Restore a CVar to its startup value" },
+                { "cvarlist ", "List CVars matching text" }, { "scriptErrors 1", "Show Lua errors" }, { "scriptErrors 0", "Hide Lua errors" },
+            }
+        end
+        table.sort(consoleNames, function(a, b) return a[1]:lower() < b[1]:lower() end)
     end
     local suggestionButtons, matches, selectedSuggestion = {}, {}, 1
     local replaceStart, replaceEnd = 1, 0
@@ -779,6 +816,7 @@ local function BuildUI()
             if trimmed ~= "" and not trimmed:match("^[/#]") then return "each line must begin with / or #" end
             local command = trimmed:match("^([/#][%w]+)")
             if command and not commandLookup[command:lower()] then return "unknown command " .. command end
+            if trimmed:lower():match("^/cast[%w]*%s+%(") then return "conditions use [square brackets], not (parentheses)" end
             if trimmed:sub(-1) == ";" then return "trailing ; creates an unconditional empty action" end
         end
         return nil
@@ -803,10 +841,17 @@ local function BuildUI()
                 suggestionTitle:SetText("MACRO COMMANDS  ·  TAB TO ACCEPT")
             else
                 local command, arguments = line:match("^%s*([/#][%w]+)%s+(.*)$")
+                local commandLower = command and command:lower()
                 local spellCommands = { ["/cast"] = true, ["/castsequence"] = true, ["/castrandom"] = true, ["/use"] = true, ["/userandom"] = true, ["#showtooltip"] = true, ["#show"] = true }
-                if command and spellCommands[command:lower()] then
+                if commandLower == "/console" then
+                    BuildConsoleNames()
+                    local prefix = arguments:match("^%s*(.-)%s*$") or ""
+                    replaceStart, replaceEnd = cursor - #arguments + (arguments:find("%S") or (#arguments + 1)), cursor
+                    AddMatches(consoleNames, prefix)
+                    suggestionTitle:SetText("CONSOLE COMMANDS & CVARS  ·  TAB TO ACCEPT")
+                elseif command and spellCommands[commandLower] then
                     BuildSpellNames()
-                    local commandLower = command:lower(); if commandLower == "/use" or commandLower == "/userandom" then BuildItemNames() end
+                    if commandLower == "/use" or commandLower == "/userandom" then BuildItemNames() end
                     local segmentStart = 1
                     for position in arguments:gmatch("()[;,]") do segmentStart = position + 1 end
                     local segment = arguments:sub(segmentStart); local afterConditions = segment:match(".*%]%s*(.*)$") or segment
@@ -818,6 +863,11 @@ local function BuildUI()
                         AddMatches(resetCatalog, prefix)
                         suggestionTitle:SetText("SEQUENCE RESET  ·  TAB TO ACCEPT")
                     else
+                        local supportsConditions = commandLower == "/cast" or commandLower == "/use" or commandLower == "/castsequence" or commandLower == "/castrandom" or commandLower == "/userandom"
+                        if supportsConditions and (prefix == "" or prefix:sub(1, 1) == "@" or prefix:sub(1, 1) == "(") then
+                            AddMatches(conditionalTemplateCatalog, "", 6)
+                            suggestionTitle:SetText("CONDITIONAL TEMPLATES  ·  TAB TO ACCEPT")
+                        end
                         for _, name in ipairs(spellNames) do
                             if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
                                 matches[#matches + 1] = { insert = name, detail = "Known spell" }; if #matches >= 8 then break end
@@ -831,7 +881,7 @@ local function BuildUI()
                             end
                         end
                     end
-                    if not wantsReset then suggestionTitle:SetText("KNOWN SPELLS  ·  TAB TO ACCEPT") end
+                    if not wantsReset and #matches == 0 then suggestionTitle:SetText("KNOWN SPELLS  ·  TAB TO ACCEPT") end
                 end
             end
         end
