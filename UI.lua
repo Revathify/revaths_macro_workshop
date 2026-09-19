@@ -506,7 +506,7 @@ end
 local function RefreshRows()
     for _, row in ipairs(rowButtons) do row:Hide() end
     local records = RecordsForSource()
-    local rowHeight = ns.db and ns.db.compactRows and 39 or 49
+    local rowHeight = ns.db and ns.db.compactRows and 39 or (activeSource == "internet" and 58 or 49)
     rows:SetHeight(math.max(1, #records * rowHeight))
     for slot, record in ipairs(records) do
         local row = rowButtons[slot]
@@ -514,9 +514,9 @@ local function RefreshRows()
             row = Button(rows, "", 228, 44)
             row.icon = row:CreateTexture(nil, "ARTWORK")
             row.icon:SetSize(32, 32); row.icon:SetPoint("LEFT", 6, 0); row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-            row.label:ClearAllPoints(); row.label:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, -2); row.label:SetPoint("RIGHT", -6, 0); row.label:SetJustifyH("LEFT")
+            row.label:ClearAllPoints(); row.label:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 8, -1); row.label:SetPoint("RIGHT", -6, 0); row.label:SetHeight(18); row.label:SetJustifyH("LEFT"); row.label:SetWordWrap(false); row.label:SetNonSpaceWrap(false)
             row.detail = Text(row, 10, "muted")
-            row.detail:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 8, 2); row.detail:SetPoint("RIGHT", -6, 0)
+            row.detail:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, -1); row.detail:SetPoint("RIGHT", -6, 0); row.detail:SetHeight(14); row.detail:SetJustifyH("LEFT"); row.detail:SetWordWrap(false); row.detail:SetNonSpaceWrap(false)
             rowButtons[slot] = row
         end
         row:SetSize(228, rowHeight - 5); row:ClearAllPoints(); row:SetPoint("TOPLEFT", 0, -((slot - 1) * rowHeight))
@@ -871,7 +871,7 @@ local function BuildUI()
         macroBody:SetText(updated); macroBody:SetCursorPosition(replaceStart - 1 + #item.insert); suggestionPopup:Hide(); matches = {}
         if UpdateSuggestions then C_Timer.After(0, function() if macroBody:HasFocus() then UpdateSuggestions() end end) end
     end
-    for index, button in ipairs(suggestionButtons) do button:SetScript("OnClick", function() selectedSuggestion = index; AcceptSuggestion() end) end
+    for index, button in ipairs(suggestionButtons) do button:SetScript("OnClick", function() selectedSuggestion = index; macroBody:SetFocus(); AcceptSuggestion() end) end
     local function AddMatches(catalog, prefix, limit)
         prefix = (prefix or ""):lower()
         for _, entry in ipairs(catalog) do
