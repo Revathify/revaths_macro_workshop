@@ -13,8 +13,12 @@ events:SetScript("OnEvent", function(_, event, loadedName)
         RevathsMacroDB.fontSize = math.max(10, math.min(24, tonumber(RevathsMacroDB.fontSize) or 13))
         ns.db = RevathsMacroDB
         if ns.Initialize then ns:Initialize() end
-    elseif event ~= "PLAYER_LOGIN" then
+    elseif event == "ADDON_LOADED" and loadedName ~= "Blizzard_MacroUI" then
         return
+    end
+    if event == "PLAYER_LOGIN" and not MacroFrame then
+        local loadAddOn = C_AddOns and C_AddOns.LoadAddOn or LoadAddOn
+        if loadAddOn then pcall(loadAddOn, "Blizzard_MacroUI") end
     end
     if ns.RedirectBlizzardMacroFrame then ns:RedirectBlizzardMacroFrame() end
 end)

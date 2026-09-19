@@ -326,7 +326,6 @@ end
 
 function ns:RedirectBlizzardMacroFrame()
     if self.macroRedirectInstalled then return end
-    self.macroRedirectInstalled = true
 
     local function Redirect()
         if self.redirectingMacroFrame then return end
@@ -341,10 +340,18 @@ function ns:RedirectBlizzardMacroFrame()
         self.redirectingMacroFrame = nil
     end
 
-    if MacroFrame then MacroFrame:HookScript("OnShow", Redirect) end
-    if type(MacroFrame_Show) == "function" then
-        hooksecurefunc("MacroFrame_Show", Redirect)
+    local installed = false
+    if MacroFrame then
+        MacroFrame:HookScript("OnShow", Redirect)
+        installed = true
     end
+    for _, functionName in ipairs({ "MacroFrame_Show", "ShowMacroFrame" }) do
+        if type(_G[functionName]) == "function" then
+            hooksecurefunc(functionName, Redirect)
+            installed = true
+        end
+    end
+    self.macroRedirectInstalled = installed
 end
 
 function ns:Toggle()
