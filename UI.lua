@@ -706,15 +706,22 @@ local function BuildUI()
         { "button:", "Mouse button used" }, { "actionbar:", "Current action bar page" }, { "bonusbar:", "Current bonus bar" }, { "equipped:", "Item type equipped" },
         { "pet", "Pet exists" }, { "nopet", "No pet" }, { "vehicleui", "Vehicle UI active" }, { "overridebar", "Override bar active" }, { "possessbar", "Possess bar active" },
     }
-    local conditionalTemplateCatalog = {
-        { "[@target] ", "Cast on your current target" },
-        { "[@mouseover,help,nodead][] ", "Friendly mouseover, otherwise normal target" },
-        { "[@focus,help,nodead][] ", "Friendly focus, otherwise normal target" },
-        { "[@target,harm,nodead][] ", "Living hostile target, otherwise fallback" },
-        { "[@player] ", "Always cast on yourself" },
-        { "[mod:shift,@player][] ", "Self-cast with Shift, otherwise normal target" },
-        { "[@cursor] ", "Place a ground spell at the cursor" },
-        { "[@none] ", "Open the ground-targeting cursor" },
+    local castTargetCatalog = {
+        { "@target", "Current target" }, { "@mouseover", "Unit under the mouse cursor" },
+        { "@player", "Your character" }, { "@focus", "Your focus target" },
+        { "@pet", "Your pet" }, { "@targettarget", "Your target's target" },
+        { "@cursor", "Ground at the cursor" }, { "@none", "Open the ground-targeting cursor" },
+    }
+    local targetFilterCatalog = {
+        { ",help,nodead", "Friendly and alive" }, { ",harm,nodead", "Hostile and alive" },
+        { ",help,dead", "Friendly and dead" }, { ",harm,dead", "Hostile and dead" },
+        { ",help", "Any friendly unit" }, { ",harm", "Any hostile unit" },
+        { ",exists", "Only when the unit exists" }, { "] ", "No additional filter" },
+    }
+    local conditionalEndingCatalog = {
+        { "][] ", "Otherwise use the normal target" },
+        { "][@player] ", "Otherwise cast on yourself" },
+        { "] ", "No fallback; stop if conditions fail" },
     }
     local commandLookup, spellNames, itemNames, consoleNames = {}, {}, { "13", "14", "Healthstone" }, {}
     for _, entry in ipairs(commandCatalog) do commandLookup[(entry[1]:match("^(%S+)") or entry[1]):lower()] = true end
@@ -781,6 +788,7 @@ local function BuildUI()
     end
     local suggestionButtons, matches, selectedSuggestion = {}, {}, 1
     local replaceStart, replaceEnd = 1, 0
+    local UpdateSuggestions
     for index = 1, 8 do
         local button = Button(suggestionPopup, "", 348, 21); button:SetPoint("TOPLEFT", 10, -25 - (index - 1) * 23); button.label:SetJustifyH("LEFT"); button.label:ClearAllPoints(); button.label:SetPoint("LEFT", 7, 0); button.label:SetPoint("RIGHT", -7, 0); suggestionButtons[index] = button
     end
@@ -798,6 +806,7 @@ local function BuildUI()
         local text = macroBody:GetText() or ""
         local updated = text:sub(1, replaceStart - 1) .. item.insert .. text:sub(replaceEnd + 1)
         macroBody:SetText(updated); macroBody:SetCursorPosition(replaceStart - 1 + #item.insert); suggestionPopup:Hide(); matches = {}
+        if UpdateSuggestions then C_Timer.After(0, function() if macroBody:HasFocus() then UpdateSuggestions() end end) end
     end
     for index, button in ipairs(suggestionButtons) do button:SetScript("OnClick", function() selectedSuggestion = index; AcceptSuggestion() end) end
     local function AddMatches(catalog, prefix, limit)
@@ -822,18 +831,44 @@ local function BuildUI()
         end
         return nil
     end
-    local function UpdateSuggestions()
+    UpdateSuggestions = function()
         local text = macroBody:GetText() or ""; local cursor = macroBody:GetCursorPosition() or #text; local before = text:sub(1, cursor)
         local line = before:match("([^\n]*)$") or ""; local lineStart = cursor - #line + 1
         matches, selectedSuggestion = {}, 1
         local openBracket = line:match(".*()%[")
         if openBracket and not line:sub(openBracket):find("%]") then
-            local comma = line:sub(openBracket + 1):match(".*(),")
-            local tokenStart = comma and (openBracket + comma + 1) or (openBracket + 1)
-            local token = line:sub(tokenStart):match("^%s*(.-)%s*$") or ""
-            replaceStart, replaceEnd = lineStart + tokenStart - 1, cursor
-            AddMatches(conditionalCatalog, token)
-            suggestionTitle:SetText("MACRO CONDITIONS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+            local conditionText = line:sub(openBracket + 1)
+            local comma = conditionText:match(".*(),")
+            local selectedTarget = conditionText:match("^(@[%w]+)$")
+            if conditionText == "" then
+                replaceStart, replaceEnd = cursor + 1, cursor
+                AddMatches(castTargetCatalog, "")
+                suggestionTitle:SetText("STEP 1/3  ·  CAST TARGET  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+            elseif selectedTarget then
+                replaceStart, replaceEnd = cursor + 1, cursor
+                AddMatches(targetFilterCatalog, "")
+                suggestionTitle:SetText("STEP 2/3  ·  TARGET FILTER  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+            elseif comma and conditionText:sub(-1) ~= "," then
+                local lastToken = conditionText:sub(comma + 1):match("^%s*(.-)%s*$") or ""
+                local complete = false
+                for _, entry in ipairs(conditionalCatalog) do if entry[1]:lower() == lastToken:lower() then complete = true; break end end
+                if complete then
+                    replaceStart, replaceEnd = cursor + 1, cursor
+                    AddMatches(conditionalEndingCatalog, "")
+                    suggestionTitle:SetText("STEP 3/3  ·  FALLBACK  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+                else
+                    local tokenStart = openBracket + comma + 1
+                    replaceStart, replaceEnd = lineStart + tokenStart - 1, cursor
+                    AddMatches(conditionalCatalog, lastToken)
+                    suggestionTitle:SetText("MACRO CONDITIONS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+                end
+            else
+                local tokenStart = comma and (openBracket + comma + 1) or (openBracket + 1)
+                local token = line:sub(tokenStart):match("^%s*(.-)%s*$") or ""
+                replaceStart, replaceEnd = lineStart + tokenStart - 1, cursor
+                AddMatches(conditionalCatalog, token)
+                suggestionTitle:SetText("MACRO CONDITIONS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+            end
         else
             local commandOnly = line:match("^%s*([/#][%w]*)$")
             if commandOnly then
@@ -865,9 +900,15 @@ local function BuildUI()
                         suggestionTitle:SetText("SEQUENCE RESET  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                     else
                         local supportsConditions = commandLower == "/cast" or commandLower == "/use" or commandLower == "/castsequence" or commandLower == "/castrandom" or commandLower == "/userandom"
-                        if supportsConditions and (prefix == "" or prefix:sub(1, 1) == "@" or prefix:sub(1, 1) == "(") then
-                            AddMatches(conditionalTemplateCatalog, "", 6)
-                            suggestionTitle:SetText("CONDITIONAL TEMPLATES  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+                        if supportsConditions and not segment:find("%]") and (prefix == "" or prefix:sub(1, 1) == "@" or prefix:sub(1, 1) == "(") then
+                            local targetPrefix = prefix:gsub("^[%[@%(]+", "")
+                            for _, entry in ipairs(castTargetCatalog) do
+                                if entry[1]:sub(2, #targetPrefix + 1):lower() == targetPrefix:lower() then
+                                    matches[#matches + 1] = { insert = "[" .. entry[1], detail = entry[2] }
+                                    if #matches >= 8 then break end
+                                end
+                            end
+                            suggestionTitle:SetText("STEP 1/3  ·  CAST TARGET  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                         end
                         for _, name in ipairs(spellNames) do
                             if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
