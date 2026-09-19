@@ -678,46 +678,176 @@ local function BuildUI()
     local fontPlus = Button(editorPane, "+", 27, 23); fontPlus:SetPoint("TOPRIGHT", -20, -111)
     fontMinus:SetScript("OnClick", function() ChangeEditorFontSize(-1) end); fontPlus:SetScript("OnClick", function() ChangeEditorFontSize(1) end)
     macroBody = Edit(editorPane, true); macroBody:SetPoint("TOPLEFT", bodyLabel, "BOTTOMLEFT", 0, -6); macroBody:SetPoint("BOTTOMRIGHT", -20, 139); macroBody:SetMaxLetters(255)
-    local suggestionPopup = CreateFrame("Frame", nil, editorPane, "BackdropTemplate"); suggestionPopup:SetSize(240, 190); suggestionPopup:SetFrameLevel(editorPane:GetFrameLevel() + 10); RegisterBackdrop(suggestionPopup, "panel"); suggestionPopup:Hide()
-    local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("MACRO COMMANDS")
-    local macroCommands = { "/cast ", "/use ", "/target ", "/focus ", "/assist ", "/mouseover ", "/stopcasting", "/cancelaura ", "/startattack", "/dismount", "/run ", "/click " }
-    local suggestionButtons = {}
-    local firstSuggestion
-    for index = 1, 8 do
-        local button = Button(suggestionPopup, "", 218, 18); button:SetPoint("TOPLEFT", 10, -24 - (index - 1) * 20); suggestionButtons[index] = button
-    end
-    local function AcceptSuggestion(command)
-        if not command then return end
-        local text = macroBody:GetText() or ""; local line = text:match("([^\n]*)$") or ""; local prefix = text:sub(1, #text - #line)
-        macroBody:SetText(prefix .. command); macroBody:SetCursorPosition(#prefix + #command); suggestionPopup:Hide(); firstSuggestion = nil
-    end
-    local function UpdateSuggestions()
-        local text = macroBody:GetText() or ""; local line = text:match("([^\n]*)$") or ""; local partial = line:match("^%s*(/[%w]*)$")
-        firstSuggestion = nil
-        if not partial or #partial < 2 then suggestionPopup:Hide(); return end
-        local matches = {}
-        for _, command in ipairs(macroCommands) do
-            local commandWord = command:match("^(%S+)") or command
-            if commandWord:lower() == partial:lower() then suggestionPopup:Hide(); return end
-            if commandWord:sub(1, #partial):lower() == partial:lower() then matches[#matches + 1] = command end
+    local suggestionPopup = CreateFrame("Frame", nil, editorPane, "BackdropTemplate"); suggestionPopup:SetSize(370, 224); suggestionPopup:SetFrameLevel(editorPane:GetFrameLevel() + 10); RegisterBackdrop(suggestionPopup, "panel"); suggestionPopup:Hide()
+    local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("SYNTAX SUGGESTIONS  ·  TAB TO ACCEPT")
+    local commandCatalog = {
+        { "/cast ", "Cast a spell" }, { "/castsequence ", "Cast spells in sequence" }, { "/castrandom ", "Cast one listed spell" },
+        { "/use ", "Use an item or spell" }, { "/userandom ", "Use one listed item" }, { "/stopcasting", "Stop the current cast" },
+        { "/cancelaura ", "Cancel one of your auras" }, { "/startattack", "Begin attacking" }, { "/stopattack", "Stop attacking" },
+        { "/target ", "Target by unit or name" }, { "/targetexact ", "Target an exact name" }, { "/targetenemy", "Cycle hostile targets" },
+        { "/targetenemyplayer", "Cycle hostile players" }, { "/targetfriend", "Cycle friendly targets" }, { "/targetfriendplayer", "Cycle friendly players" },
+        { "/targetlasttarget", "Restore previous target" }, { "/targetlastenemy", "Restore previous enemy" }, { "/targetlastfriend", "Restore previous friend" },
+        { "/focus ", "Set your focus target" }, { "/clearfocus", "Clear focus" }, { "/cleartarget", "Clear target" }, { "/assist ", "Target another unit's target" },
+        { "/petattack", "Order pet to attack" }, { "/petfollow", "Order pet to follow" }, { "/petassist", "Set pet to assist" }, { "/petdefensive", "Set pet defensive" }, { "/petpassive", "Set pet passive" },
+        { "/equip ", "Equip an item" }, { "/equipslot ", "Equip into a slot" }, { "/equipset ", "Equip an equipment set" },
+        { "/click ", "Click a secure button" }, { "/dismount", "Dismount" }, { "/run ", "Run Lua code" }, { "/script ", "Run Lua code" },
+        { "/say ", "Say a message" }, { "/party ", "Party message" }, { "/raid ", "Raid message" }, { "/instance ", "Instance message" }, { "/yell ", "Yell a message" }, { "/whisper ", "Whisper a player" },
+        { "#showtooltip ", "Set action icon and tooltip" }, { "#show ", "Set action icon" },
+    }
+    local conditionalCatalog = {
+        { "@player", "Your character" }, { "@target", "Current target" }, { "@focus", "Focus target" }, { "@mouseover", "Unit under cursor" }, { "@cursor", "Ground at cursor" }, { "@none", "Show targeting cursor" },
+        { "help", "Friendly target" }, { "harm", "Hostile target" }, { "exists", "Target exists" }, { "dead", "Target is dead" }, { "nodead", "Target is alive" },
+        { "combat", "In combat" }, { "nocombat", "Out of combat" }, { "mod:shift", "Shift held" }, { "mod:ctrl", "Ctrl held" }, { "mod:alt", "Alt held" }, { "nomod", "No modifier held" },
+        { "group", "In a group" }, { "group:party", "In a party" }, { "group:raid", "In a raid" }, { "party", "Target is in party" }, { "raid", "Target is in raid" },
+        { "stance:", "Stance or form number" }, { "form:", "Shapeshift form number" }, { "spec:", "Specialization number" }, { "known:", "Spell or talent known" }, { "channeling", "Currently channeling" }, { "nochanneling", "Not channeling" },
+        { "button:", "Mouse button used" }, { "actionbar:", "Current action bar page" }, { "bonusbar:", "Current bonus bar" }, { "equipped:", "Item type equipped" },
+        { "pet", "Pet exists" }, { "nopet", "No pet" }, { "vehicleui", "Vehicle UI active" }, { "overridebar", "Override bar active" }, { "possessbar", "Possess bar active" },
+    }
+    local commandLookup, spellNames, itemNames = {}, {}, { "13", "14", "Healthstone" }
+    for _, entry in ipairs(commandCatalog) do commandLookup[(entry[1]:match("^(%S+)") or entry[1]):lower()] = true end
+    local function BuildSpellNames()
+        if #spellNames > 0 then return end
+        local seen = {}
+        local function Add(name) if name and name ~= "" and not seen[name] then seen[name] = true; spellNames[#spellNames + 1] = name end end
+        if C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines and C_SpellBook.GetSpellBookSkillLineInfo and C_SpellBook.GetSpellBookItemName and Enum and Enum.SpellBookSpellBank then
+            local bank = Enum.SpellBookSpellBank.Player
+            for lineIndex = 1, C_SpellBook.GetNumSpellBookSkillLines() do
+                local info = C_SpellBook.GetSpellBookSkillLineInfo(lineIndex)
+                if info and not info.shouldHide then
+                    for slot = (info.itemIndexOffset or 0) + 1, (info.itemIndexOffset or 0) + (info.numSpellBookItems or 0) do Add(C_SpellBook.GetSpellBookItemName(slot, bank)) end
+                end
+            end
+        elseif GetNumSpellTabs and GetSpellTabInfo and GetSpellBookItemName then
+            for tab = 1, GetNumSpellTabs() do
+                local _, _, offset, count = GetSpellTabInfo(tab)
+                for slot = (offset or 0) + 1, (offset or 0) + (count or 0) do Add(GetSpellBookItemName(slot, BOOKTYPE_SPELL)) end
+            end
         end
-        if #matches == 0 then suggestionPopup:Hide(); return end
-        firstSuggestion = matches[1]
-        suggestionPopup:ClearAllPoints(); suggestionPopup:SetPoint("TOPLEFT", macroBody, "TOPLEFT", 12, -6); suggestionPopup:Show()
+        table.sort(spellNames)
+    end
+    local function BuildItemNames()
+        if #itemNames > 3 then return end
+        local seen = { ["13"] = true, ["14"] = true, Healthstone = true }
+        if C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerItemInfo then
+            for bag = 0, NUM_BAG_SLOTS or 4 do
+                for slot = 1, C_Container.GetContainerNumSlots(bag) do
+                    local info = C_Container.GetContainerItemInfo(bag, slot)
+                    if info and info.itemID then
+                        local name = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(info.itemID) or (GetItemInfo and GetItemInfo(info.itemID))
+                        if name and not seen[name] then seen[name] = true; itemNames[#itemNames + 1] = name end
+                    end
+                end
+            end
+        end
+        table.sort(itemNames)
+    end
+    local suggestionButtons, matches, selectedSuggestion = {}, {}, 1
+    local replaceStart, replaceEnd = 1, 0
+    for index = 1, 8 do
+        local button = Button(suggestionPopup, "", 348, 21); button:SetPoint("TOPLEFT", 10, -25 - (index - 1) * 23); button.label:SetJustifyH("LEFT"); button.label:ClearAllPoints(); button.label:SetPoint("LEFT", 7, 0); button.label:SetPoint("RIGHT", -7, 0); suggestionButtons[index] = button
+    end
+    local function PaintSuggestions()
         for index, button in ipairs(suggestionButtons) do
-            local command = matches[index]; button:SetShown(command ~= nil)
-            if command then
-                button.label:SetText(command); button:SetScript("OnClick", function()
-                    AcceptSuggestion(command)
-                end)
+            local item = matches[index]
+            button:SetShown(item ~= nil); button.selected = index == selectedSuggestion
+            if item then button.label:SetText(item.insert .. (item.detail and ("  |cff8899aa— " .. item.detail .. "|r") or "")) end
+        end
+        for index, button in ipairs(suggestionButtons) do button:SetBackdropBorderColor(Color(index == selectedSuggestion and "accent" or "border")) end
+    end
+    local function AcceptSuggestion(item)
+        item = item or matches[selectedSuggestion]
+        if not item then return end
+        local text = macroBody:GetText() or ""
+        local updated = text:sub(1, replaceStart - 1) .. item.insert .. text:sub(replaceEnd + 1)
+        macroBody:SetText(updated); macroBody:SetCursorPosition(replaceStart - 1 + #item.insert); suggestionPopup:Hide(); matches = {}
+    end
+    for index, button in ipairs(suggestionButtons) do button:SetScript("OnClick", function() selectedSuggestion = index; AcceptSuggestion() end) end
+    local function AddMatches(catalog, prefix, limit)
+        prefix = (prefix or ""):lower()
+        for _, entry in ipairs(catalog) do
+            if entry[1]:sub(1, #prefix):lower() == prefix then
+                matches[#matches + 1] = { insert = entry[1], detail = entry[2] }
+                if #matches >= (limit or 8) then return end
             end
         end
     end
+    local function ValidateMacro(text)
+        local openCount = select(2, text:gsub("%[", "")); local closeCount = select(2, text:gsub("%]", ""))
+        if openCount ~= closeCount then return "unmatched [ or ]" end
+        for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+            local trimmed = line:match("^%s*(.-)%s*$")
+            if trimmed ~= "" and not trimmed:match("^[/#]") then return "each line must begin with / or #" end
+            local command = trimmed:match("^([/#][%w]+)")
+            if command and not commandLookup[command:lower()] then return "unknown command " .. command end
+            if trimmed:sub(-1) == ";" then return "trailing ; creates an unconditional empty action" end
+        end
+        return nil
+    end
+    local function UpdateSuggestions()
+        local text = macroBody:GetText() or ""; local cursor = macroBody:GetCursorPosition() or #text; local before = text:sub(1, cursor)
+        local line = before:match("([^\n]*)$") or ""; local lineStart = cursor - #line + 1
+        matches, selectedSuggestion = {}, 1
+        local openBracket = line:match(".*()%[")
+        if openBracket and not line:sub(openBracket):find("%]") then
+            local comma = line:sub(openBracket + 1):match(".*(),")
+            local tokenStart = comma and (openBracket + comma + 1) or (openBracket + 1)
+            local token = line:sub(tokenStart):match("^%s*(.-)%s*$") or ""
+            replaceStart, replaceEnd = lineStart + tokenStart - 1, cursor
+            AddMatches(conditionalCatalog, token)
+            suggestionTitle:SetText("MACRO CONDITIONS  ·  TAB TO ACCEPT")
+        else
+            local commandOnly = line:match("^%s*([/#][%w]*)$")
+            if commandOnly then
+                replaceStart, replaceEnd = lineStart + (line:find("[/#]") or 1) - 1, cursor
+                AddMatches(commandCatalog, commandOnly)
+                suggestionTitle:SetText("MACRO COMMANDS  ·  TAB TO ACCEPT")
+            else
+                local command, arguments = line:match("^%s*([/#][%w]+)%s+(.*)$")
+                local spellCommands = { ["/cast"] = true, ["/castsequence"] = true, ["/castrandom"] = true, ["/use"] = true, ["/userandom"] = true, ["#showtooltip"] = true, ["#show"] = true }
+                if command and spellCommands[command:lower()] then
+                    BuildSpellNames()
+                    local commandLower = command:lower(); if commandLower == "/use" or commandLower == "/userandom" then BuildItemNames() end
+                    local segmentStart = 1
+                    for position in arguments:gmatch("()[;,]") do segmentStart = position + 1 end
+                    local segment = arguments:sub(segmentStart); local afterConditions = segment:match(".*%]%s*(.*)$") or segment
+                    local leading = #segment - #afterConditions; local prefix = afterConditions:match("^%s*(.-)%s*$") or ""
+                    replaceStart, replaceEnd = cursor - #segment + leading + (afterConditions:find("%S") or (#afterConditions + 1)), cursor
+                    local resetCatalog = { { "reset=target ", "Reset when target changes" }, { "reset=combat ", "Reset when combat ends" }, { "reset=shift ", "Reset when Shift is held" }, { "reset=ctrl ", "Reset when Ctrl is held" }, { "reset=alt ", "Reset when Alt is held" }, { "reset=5 ", "Reset after five idle seconds" } }
+                    local wantsReset = commandLower == "/castsequence" and (prefix == "" or string.sub("reset=", 1, #prefix):lower() == prefix:lower())
+                    if wantsReset then
+                        AddMatches(resetCatalog, prefix)
+                        suggestionTitle:SetText("SEQUENCE RESET  ·  TAB TO ACCEPT")
+                    else
+                        for _, name in ipairs(spellNames) do
+                            if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
+                                matches[#matches + 1] = { insert = name, detail = "Known spell" }; if #matches >= 8 then break end
+                            end
+                        end
+                    end
+                    if #matches < 8 and (commandLower == "/use" or commandLower == "/userandom") then
+                        for _, name in ipairs(itemNames) do
+                            if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
+                                matches[#matches + 1] = { insert = name, detail = "Bag item or equipment slot" }; if #matches >= 8 then break end
+                            end
+                        end
+                    end
+                    if not wantsReset then suggestionTitle:SetText("KNOWN SPELLS  ·  TAB TO ACCEPT") end
+                end
+            end
+        end
+        if #matches == 0 then suggestionPopup:Hide(); return end
+        suggestionPopup:ClearAllPoints(); suggestionPopup:SetPoint("TOPLEFT", macroBody, "TOPLEFT", 12, -6); suggestionPopup:Show(); PaintSuggestions()
+    end
     macroBody:SetScript("OnTextChanged", function(self, userInput)
-        bodyLabel:SetText(string.format("MACRO BODY  %d / 255", string.len(self:GetText() or "")))
+        local text = self:GetText() or ""; local problem = ValidateMacro(text)
+        bodyLabel:SetText(string.format("MACRO BODY  %d / 255%s", string.len(text), problem and ("  ·  " .. problem) or "")); bodyLabel:SetTextColor(Color(problem and "danger" or "muted"))
         if userInput then UpdateSuggestions() end
     end)
-    macroBody:SetScript("OnTabPressed", function() if firstSuggestion then AcceptSuggestion(firstSuggestion) end end)
+    macroBody:SetScript("OnTabPressed", function() AcceptSuggestion() end)
+    macroBody:SetScript("OnArrowPressed", function(_, key)
+        if not suggestionPopup:IsShown() or #matches == 0 then return end
+        selectedSuggestion = math.max(1, math.min(#matches, selectedSuggestion + (key == "DOWN" and 1 or -1))); PaintSuggestions()
+    end)
     macroName:SetScript("OnEscapePressed", function() macroName:ClearFocus() end)
     macroBody:SetScript("OnEscapePressed", function() macroBody:ClearFocus() end)
     sourceLabel = Text(editorPane, 10, "muted"); sourceLabel:SetPoint("BOTTOMLEFT", 20, 104); sourceLabel:SetText("SOURCE")
