@@ -13,8 +13,8 @@ events:SetScript("OnEvent", function(_, event, loadedName)
         if type(RevathsMacroDB) ~= "table" then RevathsMacroDB = {} end
         RevathsMacroDB.font = type(RevathsMacroDB.font) == "string" and RevathsMacroDB.font or "friz"
         RevathsMacroDB.fontSize = math.max(10, math.min(24, tonumber(RevathsMacroDB.fontSize) or 13))
-        RevathsMacroDB.scale = math.max(0.70, math.min(1.15, tonumber(RevathsMacroDB.scale) or 1))
-        RevathsMacroDB.opacity = math.max(0.60, math.min(1, tonumber(RevathsMacroDB.opacity) or 0.97))
+        RevathsMacroDB.scale = math.max(0.65, math.min(1.10, tonumber(RevathsMacroDB.scale) or 1))
+        RevathsMacroDB.opacity = math.max(0.55, math.min(1, tonumber(RevathsMacroDB.opacity) or 0.96))
         RevathsMacroDB.palette = type(RevathsMacroDB.palette) == "string" and RevathsMacroDB.palette or "midnight"
         RevathsMacroDB.compactRows = RevathsMacroDB.compactRows == true
         RevathsMacroDB.window = type(RevathsMacroDB.window) == "table" and RevathsMacroDB.window or {}

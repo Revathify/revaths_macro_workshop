@@ -16,6 +16,21 @@ local PALETTES = {
         panelAlt = { 0.060, 0.125, 0.100 }, input = { 0.018, 0.046, 0.038 }, border = { 0.16, 0.34, 0.27 },
         accent = { 0.18, 0.78, 0.53 }, accent2 = { 0.55, 0.91, 0.48 },
     },
+    crimson = {
+        label = "Crimson Ember", background = { 0.070, 0.030, 0.035 }, panel = { 0.115, 0.048, 0.055 },
+        panelAlt = { 0.150, 0.064, 0.070 }, input = { 0.052, 0.022, 0.026 }, border = { 0.38, 0.18, 0.20 },
+        accent = { 0.91, 0.28, 0.34 }, accent2 = { 1.00, 0.62, 0.34 },
+    },
+    royal = {
+        label = "Royal Blue", background = { 0.025, 0.040, 0.080 }, panel = { 0.042, 0.070, 0.125 },
+        panelAlt = { 0.060, 0.095, 0.165 }, input = { 0.018, 0.032, 0.062 }, border = { 0.16, 0.28, 0.46 },
+        accent = { 0.25, 0.57, 0.96 }, accent2 = { 0.55, 0.78, 1.00 },
+    },
+    graphite = {
+        label = "Graphite Gray", background = { 0.050, 0.052, 0.058 }, panel = { 0.080, 0.083, 0.092 },
+        panelAlt = { 0.110, 0.114, 0.125 }, input = { 0.035, 0.037, 0.043 }, border = { 0.28, 0.29, 0.32 },
+        accent = { 0.62, 0.65, 0.70 }, accent2 = { 0.84, 0.86, 0.89 },
+    },
 }
 
 local COLORS = {
@@ -28,10 +43,35 @@ local COLORS = {
 
 local FONTS = {
     { key = "friz", label = "Friz Quadrata", path = STANDARD_TEXT_FONT, flags = "" },
+    { key = "frizOutline", label = "Friz Outlined", path = STANDARD_TEXT_FONT, flags = "OUTLINE" },
     { key = "arial", label = "Arial Narrow", path = "Fonts\\ARIALN.TTF", flags = "" },
+    { key = "arialOutline", label = "Arial Outlined", path = "Fonts\\ARIALN.TTF", flags = "OUTLINE" },
     { key = "morpheus", label = "Morpheus", path = "Fonts\\MORPHEUS.TTF", flags = "" },
+    { key = "morpheusOutline", label = "Morpheus Outlined", path = "Fonts\\MORPHEUS.TTF", flags = "OUTLINE" },
     { key = "skurri", label = "Skurri", path = "Fonts\\SKURRI.TTF", flags = "" },
+    { key = "skurriOutline", label = "Skurri Outlined", path = "Fonts\\SKURRI.TTF", flags = "OUTLINE" },
 }
+
+local function DiscoverSharedMediaFonts()
+    if not LibStub then return end
+    local media = LibStub("LibSharedMedia-3.0", true)
+    if not media or not media.HashTable then return end
+    local knownPaths = {}
+    for _, font in ipairs(FONTS) do knownPaths[string.lower(font.path)] = true end
+    local registered = media:HashTable("font")
+    if type(registered) ~= "table" then return end
+    for name, path in pairs(registered) do
+        if type(name) == "string" and type(path) == "string" and path ~= "" and not knownPaths[string.lower(path)] then
+            local key = "shared:" .. name
+            local exists = false
+            for _, font in ipairs(FONTS) do if font.key == key then exists = true end end
+            if not exists then
+                FONTS[#FONTS + 1] = { key = key, label = name, path = path, flags = "", shared = true }
+                knownPaths[string.lower(path)] = true
+            end
+        end
+    end
+end
 
 -- WoW cannot access Reddit from Lua. This small, reviewable catalog is bundled with the addon.
 -- Scores are snapshots from the linked threads, not live values.
@@ -85,6 +125,8 @@ local macroName, macroBody, bodyLabel, iconPreview, sourceBox, sourceLabel, note
 local rowButtons, tabs, styledFrames, styledText, fontObjects = {}, {}, {}, {}, {}
 local selectedRecord, selectedIcon, activeSource = nil, nil, "account"
 local settingsRefreshing = false
+local pendingScale, scaleDragging, scaleCommitToken
+local iconPopup, iconButtons, iconChoices, iconPage = nil, {}, {}, 1
 local SelectSource
 
 local function Color(role) return unpack(COLORS[role]) end
@@ -168,7 +210,29 @@ local function ApplyAppearance()
             if not ok or loaded == false then object:SetFont(STANDARD_TEXT_FONT, size, "") end
         end
     end
-    if frame then frame:SetScale(ns.db and ns.db.scale or 1) end
+    if frame and not scaleDragging then frame:SetScale(ns.db and ns.db.scale or 1) end
+end
+
+local function PreserveWindowCenterAtScale(value)
+    if not frame then return end
+    local centerX, centerY = frame:GetCenter()
+    frame:SetScale(value)
+    if centerX and centerY and UIParent.GetCenter then
+        local parentX, parentY = UIParent:GetCenter()
+        frame:ClearAllPoints()
+        frame:SetPoint("CENTER", UIParent, "CENTER", centerX - parentX, centerY - parentY)
+        if ns.db and ns.db.window then
+            ns.db.window.point, ns.db.window.relativePoint = "CENTER", "CENTER"
+            ns.db.window.x, ns.db.window.y = centerX - parentX, centerY - parentY
+        end
+    end
+end
+
+local function CommitWindowScale()
+    if not pendingScale or not ns.db or not frame then return end
+    ns.db.scale = pendingScale
+    PreserveWindowCenterAtScale(pendingScale)
+    pendingScale = nil
 end
 
 local function SetStatus(message, isError)
@@ -194,6 +258,100 @@ local function SetEditor(record)
     else
         SetStatus("Ready for a new macro. Choose where to save it.")
     end
+end
+
+local function BuildIconPicker()
+    if iconPopup then return end
+    iconPopup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    iconPopup:SetSize(420, 330)
+    iconPopup:SetFrameStrata("DIALOG")
+    iconPopup:SetClampedToScreen(true)
+    RegisterBackdrop(iconPopup, "panel")
+    local title = Text(iconPopup, 14, "text")
+    title:SetPoint("TOPLEFT", 14, -12)
+    title:SetText("Choose macro icon")
+    local hint = Text(iconPopup, 10, "muted")
+    hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+    hint:SetText("Blizzard icons and icons supplied by your installed addons")
+    for index = 1, 80 do
+        local button = CreateFrame("Button", nil, iconPopup, "BackdropTemplate")
+        button:SetSize(36, 36)
+        RegisterBackdrop(button, "panelAlt")
+        button.icon = button:CreateTexture(nil, "ARTWORK")
+        button.icon:SetPoint("TOPLEFT", 4, -4)
+        button.icon:SetPoint("BOTTOMRIGHT", -4, 4)
+        button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        local column = (index - 1) % 10
+        local row = math.floor((index - 1) / 10)
+        button:SetPoint("TOPLEFT", 14 + column * 39, -61 - row * 39)
+        iconButtons[index] = button
+    end
+    local previous = Button(iconPopup, "‹", 28, 25)
+    previous:SetPoint("BOTTOMLEFT", 14, 12)
+    local next = Button(iconPopup, "›", 28, 25)
+    next:SetPoint("BOTTOMRIGHT", -14, 12)
+    local pageLabel = Text(iconPopup, 10, "muted", "CENTER")
+    pageLabel:SetPoint("BOTTOM", 0, 20)
+    pageLabel:SetWidth(140)
+    iconPopup.previous, iconPopup.next, iconPopup.pageLabel = previous, next, pageLabel
+    previous:SetScript("OnClick", function()
+        iconPage = math.max(1, iconPage - 1)
+        RefreshIconPicker()
+    end)
+    next:SetScript("OnClick", function()
+        iconPage = math.min(math.max(1, math.ceil(#iconChoices / 80)), iconPage + 1)
+        RefreshIconPicker()
+    end)
+    local close = Button(iconPopup, "Close", 70, 26)
+    close:SetPoint("BOTTOMRIGHT", -14, 12)
+    close:SetScript("OnClick", function() iconPopup:Hide() end)
+end
+
+local function RefreshIconPicker()
+    BuildIconPicker()
+    local choices = {}
+    local function append(source)
+        if type(source) ~= "table" then return end
+        for _, value in pairs(source) do
+            if type(value) == "table" then value = value.fileID or value.icon or value.texture end
+            if value then choices[#choices + 1] = value end
+        end
+    end
+    append(GetMacroIcons and GetMacroIcons())
+    append(GetMacroItemIcons and GetMacroItemIcons())
+    if #choices == 0 then
+        choices = {
+            "Interface\\Icons\\INV_Misc_QuestionMark", "Interface\\Icons\\INV_Misc_Note_01",
+            "Interface\\Icons\\Spell_Shadow_Shadowfury", "Interface\\Icons\\Ability_Evoker_Rescue",
+        }
+    end
+    iconChoices = choices
+    local pages = math.max(1, math.ceil(#iconChoices / 80))
+    iconPage = math.max(1, math.min(pages, iconPage))
+    local offset = (iconPage - 1) * 80
+    for index, button in ipairs(iconButtons) do
+        local icon = iconChoices[offset + index]
+        button:SetShown(icon ~= nil)
+        if icon then
+            button.icon:SetTexture(icon)
+            button:SetScript("OnClick", function()
+                selectedIcon = icon
+                iconPreview:SetTexture(icon)
+                iconPopup:Hide()
+                SetStatus("Icon selected. Save the macro to apply it.")
+            end)
+        end
+    end
+    iconPopup.previous:SetEnabled(iconPage > 1)
+    iconPopup.next:SetEnabled(iconPage < pages)
+    iconPopup.pageLabel:SetText(string.format("Page %d / %d · %d icons", iconPage, pages, #iconChoices))
+end
+
+local function ShowIconPicker()
+    RefreshIconPicker()
+    iconPopup:ClearAllPoints()
+    iconPopup:SetPoint("TOPRIGHT", editorPane, "TOPRIGHT", -12, -64)
+    iconPopup:Show()
 end
 
 local function ClearEditor() SetEditor(nil); macroName:SetFocus() end
@@ -253,7 +411,16 @@ local function RefreshRows()
         row:SetSize(228, rowHeight - 5); row:ClearAllPoints(); row:SetPoint("TOPLEFT", 0, -((slot - 1) * rowHeight))
         row.label:SetText(record.name); row.detail:SetText(record.detail or ""); row.detail:SetShown(not (ns.db and ns.db.compactRows))
         row.icon:SetTexture(record.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-        row:SetScript("OnClick", function() SetEditor(record) end); row:Show()
+        row:SetScript("OnClick", function() SetEditor(record) end)
+        row:RegisterForDrag("LeftButton")
+        row:SetScript("OnDragStart", function()
+            if record.index then
+                PickupMacro(record.index)
+            else
+                SetStatus("Save this community macro first, then drag it to an action bar.", true)
+            end
+        end)
+        row:Show()
     end
     local countLabel = activeSource == "internet" and string.format("%d curated templates", #records) or string.format("%d macros", #records)
     listPane.count:SetText(countLabel)
@@ -314,9 +481,12 @@ local function BuildSettings()
     local hint = Text(settingsPage, 11, "muted"); hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -7); hint:SetText("Changes are saved account-wide and applied immediately.")
     local paletteTitle = Text(settingsPage, 11, "muted"); paletteTitle:SetPoint("TOPLEFT", 28, -84); paletteTitle:SetText("COLOR PALETTE")
     local paletteButtons = {}
-    for index, key in ipairs({ "midnight", "arcane", "emerald" }) do
-        local button = Button(settingsPage, PALETTES[key].label, 170, 34)
-        button:SetPoint("TOPLEFT", 28 + ((index - 1) * 184), -105)
+    local paletteOrder = { "midnight", "arcane", "emerald", "crimson", "royal", "graphite" }
+    for index, key in ipairs(paletteOrder) do
+        local column = (index - 1) % 3
+        local row = math.floor((index - 1) / 3)
+        local button = Button(settingsPage, PALETTES[key].label, 170, 30)
+        button:SetPoint("TOPLEFT", 28 + column * 184, -105 - row * 36)
         button:SetScript("OnClick", function()
             ns.db.palette = key
             for name, item in pairs(paletteButtons) do item.selected = name == key end
@@ -324,29 +494,47 @@ local function BuildSettings()
         end)
         paletteButtons[key] = button
     end
-    local fontTitle = Text(settingsPage, 11, "muted"); fontTitle:SetPoint("TOPLEFT", 28, -166); fontTitle:SetText("ADDON FONT")
-    local fontButton = Button(settingsPage, "", 260, 34); fontButton:SetPoint("TOPLEFT", 28, -187)
+    DiscoverSharedMediaFonts()
+    local fontTitle = Text(settingsPage, 11, "muted"); fontTitle:SetPoint("TOPLEFT", 28, -184); fontTitle:SetText("ADDON FONT")
+    local fontButton = Button(settingsPage, "", 260, 34); fontButton:SetPoint("TOPLEFT", 28, -205)
     fontButton:SetScript("OnClick", function()
+        DiscoverSharedMediaFonts()
         local current = 1
         for index, option in ipairs(FONTS) do if option.key == ns.db.font then current = index end end
         local selected = FONTS[(current % #FONTS) + 1]
         ns.db.font = selected.key; fontButton.label:SetText(selected.label .. "  ›"); ApplyAppearance()
     end)
     local compact = CreateFrame("CheckButton", nil, settingsPage, "UICheckButtonTemplate")
-    compact:SetPoint("TOPLEFT", 330, -184); compact:SetSize(28, 28)
+    compact:SetPoint("TOPLEFT", 330, -202); compact:SetSize(28, 28)
     local compactLabel = Text(settingsPage, 12, "text"); compactLabel:SetPoint("LEFT", compact, "RIGHT", 7, 0); compactLabel:SetText("Compact macro rows")
     compact:SetScript("OnClick", function(self) ns.db.compactRows = self:GetChecked() == true; RefreshRows() end)
 
-    local opacity, opacityValue = Slider(settingsPage, "WINDOW OPACITY", -250, 0.60, 1, 0.05)
-    local scale, scaleValue = Slider(settingsPage, "WINDOW SCALE", -315, 0.70, 1.15, 0.05)
-    local editorSize, editorSizeValue = Slider(settingsPage, "EDITOR FONT SIZE", -380, 10, 24, 1)
+    local opacity, opacityValue = Slider(settingsPage, "WINDOW OPACITY", -270, 0.55, 1, 0.05)
+    local scale, scaleValue = Slider(settingsPage, "WINDOW SCALE", -345, 0.65, 1.10, 0.05)
+    local editorSize, editorSizeValue = Slider(settingsPage, "EDITOR FONT SIZE", -400, 10, 24, 1)
     opacity:SetScript("OnValueChanged", function(_, value)
         value = math.floor(value * 20 + 0.5) / 20; opacityValue:SetText(string.format("%d%%", value * 100))
         if not settingsRefreshing then ns.db.opacity = value; ApplyAppearance() end
     end)
+    scale:SetScript("OnMouseDown", function() scaleDragging = true end)
+    scale:SetScript("OnMouseUp", function()
+        scaleDragging = false
+        CommitWindowScale()
+    end)
     scale:SetScript("OnValueChanged", function(_, value)
         value = math.floor(value * 20 + 0.5) / 20; scaleValue:SetText(string.format("%d%%", value * 100))
-        if not settingsRefreshing then ns.db.scale = value; frame:SetScale(value) end
+        if settingsRefreshing or not ns.db then return end
+        pendingScale = value
+        if scaleDragging then return end
+        scaleCommitToken = (scaleCommitToken or 0) + 1
+        local token = scaleCommitToken
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0.2, function()
+                if token == scaleCommitToken and not scaleDragging then CommitWindowScale() end
+            end)
+        else
+            CommitWindowScale()
+        end
     end)
     editorSize:SetScript("OnValueChanged", function(_, value)
         value = math.floor(value + 0.5); editorSizeValue:SetText(tostring(value) .. " px")
@@ -355,6 +543,7 @@ local function BuildSettings()
     local reset = Button(settingsPage, "Reset appearance", 150, 30); reset:SetPoint("BOTTOMLEFT", 28, 24)
     reset:SetScript("OnClick", function()
         ns.db.palette, ns.db.font, ns.db.opacity, ns.db.scale, ns.db.fontSize, ns.db.compactRows = "midnight", "friz", 0.97, 1, 13, false
+        pendingScale = nil
         settingsPage:Refresh(); ApplyAppearance(); RefreshRows(); SetStatus("Appearance reset to defaults.")
     end)
     local version = Text(settingsPage, 11, "muted", "RIGHT"); version:SetPoint("BOTTOMRIGHT", -28, 31); version:SetText("Revath's Macro Workshop  ·  " .. tostring(ns.version))
@@ -418,6 +607,9 @@ local function BuildUI()
     local editorTitle = Text(editorPane, 18, "text"); editorTitle:SetPoint("TOPLEFT", 20, -18); editorTitle:SetText("Macro Editor")
     local editorHint = Text(editorPane, 11, "muted"); editorHint:SetPoint("TOPLEFT", editorTitle, "BOTTOMLEFT", 0, -6); editorHint:SetText("Edit a macro or adapt a community template.")
     iconPreview = editorPane:CreateTexture(nil, "ARTWORK"); iconPreview:SetSize(42, 42); iconPreview:SetPoint("TOPRIGHT", -20, -18); iconPreview:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    local iconButton = Button(editorPane, "Change icon", 96, 25)
+    iconButton:SetPoint("TOPRIGHT", -68, -66)
+    iconButton:SetScript("OnClick", ShowIconPicker)
     local nameLabel = Text(editorPane, 11, "muted"); nameLabel:SetPoint("TOPLEFT", 20, -70); nameLabel:SetText("MACRO NAME")
     macroName = Edit(editorPane); macroName:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -6); macroName:SetPoint("RIGHT", -20, 0); macroName:SetHeight(35); macroName:SetMaxLetters(16)
     bodyLabel = Text(editorPane, 11, "muted"); bodyLabel:SetPoint("TOPLEFT", 20, -128); bodyLabel:SetText("MACRO BODY")
