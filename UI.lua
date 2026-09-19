@@ -879,7 +879,8 @@ local function BuildUI()
         { "][@player] ", "Otherwise cast on yourself" },
         { "] ", "No fallback; stop if conditions fail" },
     }
-    local commandLookup, spellNames, itemNames, consoleNames = {}, {}, { "13", "14", "Healthstone" }, {}
+    local commandLookup, spellNames, itemNames, consoleNames = {}, {}, {}, {}
+    local itemCacheDirty = true
     for _, entry in ipairs(commandCatalog) do commandLookup[(entry[1]:match("^(%S+)") or entry[1]):lower()] = true end
     local function BuildSpellNames()
         if #spellNames > 0 then return end
@@ -902,21 +903,57 @@ local function BuildUI()
         table.sort(spellNames)
     end
     local function BuildItemNames()
-        if #itemNames > 3 then return end
-        local seen = { ["13"] = true, ["14"] = true, Healthstone = true }
+        if not itemCacheDirty then return end
+        itemNames, itemCacheDirty = {}, false
+        local seen = {}
+        local function ItemSpell(itemID)
+            local getter = C_Item and C_Item.GetItemSpell or GetItemSpell
+            if not getter or not itemID then return nil end
+            local ok, spellName = pcall(getter, itemID)
+            return ok and spellName or nil
+        end
+        local function ItemIsUsable(itemID)
+            local getter = C_Item and C_Item.IsUsableItem or IsUsableItem
+            if not getter then return true end
+            local ok, usable = pcall(getter, itemID)
+            return not ok or usable ~= false
+        end
+        local function AddItem(name, itemID, detail)
+            local key = name and name:lower()
+            if key and name ~= "" and not seen[key] and ItemSpell(itemID) and ItemIsUsable(itemID) then
+                seen[key] = true
+                itemNames[#itemNames + 1] = { name = name, detail = detail }
+            end
+        end
         if C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerItemInfo then
             for bag = 0, NUM_BAG_SLOTS or 4 do
                 for slot = 1, C_Container.GetContainerNumSlots(bag) do
                     local info = C_Container.GetContainerItemInfo(bag, slot)
                     if info and info.itemID then
                         local name = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(info.itemID) or (GetItemInfo and GetItemInfo(info.itemID))
-                        if name and not seen[name] then seen[name] = true; itemNames[#itemNames + 1] = name end
+                        AddItem(name, info.itemID, "Usable item in bags")
                     end
                 end
             end
         end
-        table.sort(itemNames)
+        if GetInventoryItemID then
+            for slot = 1, 19 do
+                local itemID = GetInventoryItemID("player", slot)
+                if itemID then
+                    local name = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID) or (GetItemInfo and GetItemInfo(itemID))
+                    AddItem(name, itemID, "Equipped usable item")
+                    if (slot == 13 or slot == 14) and ItemSpell(itemID) and ItemIsUsable(itemID) then
+                        itemNames[#itemNames + 1] = { name = tostring(slot), detail = slot == 13 and "Upper equipped trinket" or "Lower equipped trinket" }
+                    end
+                end
+            end
+        end
+        table.sort(itemNames, function(a, b) return a.name:lower() < b.name:lower() end)
     end
+    local itemWatcher = CreateFrame("Frame")
+    itemWatcher:RegisterEvent("BAG_UPDATE_DELAYED")
+    itemWatcher:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    itemWatcher:SetScript("OnEvent", function() itemCacheDirty = true end)
     local function BuildConsoleNames()
         if #consoleNames > 0 then return end
         local seen = {}
@@ -1036,16 +1073,21 @@ local function BuildUI()
             else
                 local command, arguments = line:match("^%s*([/#][%w]+)%s+(.*)$")
                 local commandLower = command and command:lower()
-                local spellCommands = { ["/cast"] = true, ["/castsequence"] = true, ["/castrandom"] = true, ["/use"] = true, ["/userandom"] = true, ["#showtooltip"] = true, ["#show"] = true }
+                local castCommands = { ["/cast"] = true, ["/castsequence"] = true, ["/castrandom"] = true }
+                local itemCommands = { ["/use"] = true, ["/userandom"] = true }
+                local tooltipCommands = { ["#showtooltip"] = true, ["#show"] = true }
+                local suggestionCommands = castCommands[commandLower] or itemCommands[commandLower] or tooltipCommands[commandLower]
                 if commandLower == "/console" then
                     BuildConsoleNames()
                     local prefix = arguments:match("^%s*(.-)%s*$") or ""
                     replaceStart, replaceEnd = cursor - #arguments + (arguments:find("%S") or (#arguments + 1)), cursor
                     AddMatches(consoleNames, prefix)
                     suggestionTitle:SetText("CONSOLE COMMANDS & CVARS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
-                elseif command and spellCommands[commandLower] then
-                    BuildSpellNames()
-                    if commandLower == "/use" or commandLower == "/userandom" then BuildItemNames() end
+                elseif command and suggestionCommands then
+                    local wantsSpells = castCommands[commandLower] or tooltipCommands[commandLower]
+                    local wantsItems = itemCommands[commandLower] or tooltipCommands[commandLower]
+                    if wantsSpells then BuildSpellNames() end
+                    if wantsItems then BuildItemNames() end
                     local segmentStart = 1
                     for position in arguments:gmatch("()[;,]") do segmentStart = position + 1 end
                     local segment = arguments:sub(segmentStart); local afterConditions = segment:match(".*%]%s*(.*)$") or segment
@@ -1053,12 +1095,14 @@ local function BuildUI()
                     replaceStart, replaceEnd = cursor - #segment + leading + (afterConditions:find("%S") or (#afterConditions + 1)), cursor
                     local resetCatalog = { { "reset=target ", "Reset when target changes" }, { "reset=combat ", "Reset when combat ends" }, { "reset=shift ", "Reset when Shift is held" }, { "reset=ctrl ", "Reset when Ctrl is held" }, { "reset=alt ", "Reset when Alt is held" }, { "reset=5 ", "Reset after five idle seconds" } }
                     local wantsReset = commandLower == "/castsequence" and (prefix == "" or string.sub("reset=", 1, #prefix):lower() == prefix:lower())
+                    local showingTargets = false
                     if wantsReset then
                         AddMatches(resetCatalog, prefix)
                         suggestionTitle:SetText("SEQUENCE RESET  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                     else
-                        local supportsConditions = commandLower == "/cast" or commandLower == "/use" or commandLower == "/castsequence" or commandLower == "/castrandom" or commandLower == "/userandom"
+                        local supportsConditions = castCommands[commandLower]
                         if supportsConditions and not segment:find("%]") and (prefix == "" or prefix:sub(1, 1) == "@" or prefix:sub(1, 1) == "(") then
+                            showingTargets = true
                             local targetPrefix = prefix:gsub("^[%[@%(]+", "")
                             for _, entry in ipairs(castTargetCatalog) do
                                 if entry[1]:sub(2, #targetPrefix + 1):lower() == targetPrefix:lower() then
@@ -1068,24 +1112,29 @@ local function BuildUI()
                             end
                             suggestionTitle:SetText("STEP 1/3  ·  CAST TARGET  ·  TAB TO SELECT  ·  ENTER TO INSERT")
                         end
-                        if prefix ~= "" then
+                        if prefix ~= "" and wantsSpells then
                             for _, name in ipairs(spellNames) do
                                 if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
                                     matches[#matches + 1] = { insert = name, detail = "Known spell" }; if #matches >= 8 then break end
                                 end
                             end
-                        elseif #matches == 0 then
-                            infoOnly = true; suggestionHint:SetText("Start typing spell name"); suggestionHint:Show()
                         end
                     end
-                    if #matches < 8 and prefix ~= "" and (commandLower == "/use" or commandLower == "/userandom") then
-                        for _, name in ipairs(itemNames) do
-                            if name:sub(1, #prefix):lower() == prefix:lower() and name:lower() ~= prefix:lower() then
-                                matches[#matches + 1] = { insert = name, detail = "Bag item or equipment slot" }; if #matches >= 8 then break end
+                    if #matches < 8 and prefix ~= "" and wantsItems then
+                        for _, item in ipairs(itemNames) do
+                            if item.name:sub(1, #prefix):lower() == prefix:lower() and item.name:lower() ~= prefix:lower() then
+                                matches[#matches + 1] = { insert = item.name, detail = item.detail }; if #matches >= 8 then break end
                             end
                         end
                     end
-                    if not wantsReset and #matches == 0 then suggestionTitle:SetText("KNOWN SPELLS  ·  TAB TO SELECT  ·  ENTER TO INSERT") end
+                    if not wantsReset and prefix == "" and #matches == 0 then
+                        infoOnly = true
+                        suggestionHint:SetText(wantsItems and wantsSpells and "Start typing spell or item name" or wantsItems and "Start typing item name" or "Start typing spell name")
+                        suggestionHint:Show()
+                    end
+                    if not wantsReset and not showingTargets then
+                        suggestionTitle:SetText(wantsItems and wantsSpells and "KNOWN SPELLS & USABLE ITEMS  ·  TAB TO SELECT  ·  ENTER TO INSERT" or wantsItems and "USABLE ITEMS  ·  TAB TO SELECT  ·  ENTER TO INSERT" or "KNOWN SPELLS  ·  TAB TO SELECT  ·  ENTER TO INSERT")
+                    end
                 end
             end
         end
