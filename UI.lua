@@ -627,8 +627,6 @@ local function BuildUI()
         bodyLabel:SetText(string.format("MACRO BODY  %d / 255", string.len(self:GetText() or "")))
         if userInput then UpdateSuggestions() end
     end)
-    macroName:SetPropagateKeyboardInput(true)
-    macroBody:SetPropagateKeyboardInput(true)
     macroName:SetScript("OnEscapePressed", function() macroName:ClearFocus() end)
     macroBody:SetScript("OnEscapePressed", function() macroBody:ClearFocus() end)
     sourceLabel = Text(editorPane, 10, "muted"); sourceLabel:SetPoint("BOTTOMLEFT", 20, 104); sourceLabel:SetText("SOURCE")
@@ -646,8 +644,7 @@ local function BuildUI()
     resize:SetScript("OnLeave", function(self) self:SetBackdropBorderColor(Color(self.selected and "accent" or "border")); GameTooltip:Hide() end)
     resize:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
     resize:SetScript("OnMouseUp", function() frame:StopMovingOrSizing(); ns.db.window.width, ns.db.window.height = frame:GetWidth(), frame:GetHeight() end)
-    frame:SetPropagateKeyboardInput(true)
-    BuildSettings(); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
+    BuildSettings(); table.insert(UISpecialFrames, frame:GetName()); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
 end
 
 function ns:Initialize() BuildUI() end
