@@ -143,6 +143,7 @@ local macroName, macroBody, bodyLabel, iconPreview, sourceBox, sourceLabel, note
 local rowButtons, tabs, styledFrames, styledText, fontObjects = {}, {}, {}, {}, {}
 local selectedRecord, selectedIcon, activeSource = nil, nil, "account"
 local settingsRefreshing = false
+local reopenGameMenuOnHide = false
 local pendingScale, scaleDragging, scaleCommitToken
 local iconPopup, iconButtons, iconChoices, iconPage = nil, {}, {}, 1
 local SelectSource
@@ -677,6 +678,17 @@ local function BuildUI()
     resize:SetScript("OnLeave", function(self) self.label:SetTextColor(Color("accent")); GameTooltip:Hide() end)
     resize:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
     resize:SetScript("OnMouseUp", function() frame:StopMovingOrSizing(); ns.db.window.width, ns.db.window.height = frame:GetWidth(), frame:GetHeight() end)
+    frame:SetScript("OnHide", function()
+        if not reopenGameMenuOnHide then return end
+        reopenGameMenuOnHide = false
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+                if not frame:IsShown() and ToggleGameMenu then ToggleGameMenu() end
+            end)
+        elseif ToggleGameMenu then
+            ToggleGameMenu()
+        end
+    end)
     BuildSettings(); table.insert(UISpecialFrames, frame:GetName()); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
 end
 
@@ -690,6 +702,7 @@ function ns:RedirectBlizzardMacroFrame()
         self.redirectingMacroFrame = true
         if MacroFrame then MacroFrame:Hide() end
         if frame and not frame:IsShown() then
+            reopenGameMenuOnHide = true
             ApplyAppearance()
             SelectSource(activeSource)
             frame:Show()
@@ -713,5 +726,11 @@ end
 
 function ns:Toggle()
     if not frame then return end
-    if frame:IsShown() then frame:Hide() else ApplyAppearance(); SelectSource(activeSource); frame:Show() end
+    if frame:IsShown() then
+        reopenGameMenuOnHide = false
+        frame:Hide()
+    else
+        reopenGameMenuOnHide = false
+        ApplyAppearance(); SelectSource(activeSource); frame:Show()
+    end
 end
