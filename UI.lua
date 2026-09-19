@@ -160,7 +160,7 @@ local selectedRecord, selectedIcon, activeSource = nil, nil, "account"
 local settingsRefreshing = false
 local selectedInternetClass
 local pendingScale, scaleDragging, scaleCommitToken
-local iconPopup, iconButtons, iconChoices, iconPage = nil, {}, {}, 1
+local iconPopup, iconButtons, iconChoices, iconScrollBar = nil, {}, {}, nil
 local SelectSource
 
 local function Color(role) return unpack(COLORS[role]) end
@@ -302,6 +302,20 @@ local function SetEditor(record)
     end
 end
 
+local ICON_COLUMNS, ICON_VISIBLE_ROWS = 10, 9
+
+local function UpdateVisibleIcons()
+    if not iconPopup or not iconScrollBar then return end
+    local rowOffset = math.floor((iconScrollBar:GetValue() or 0) + 0.5)
+    local offset = rowOffset * ICON_COLUMNS
+    for index, button in ipairs(iconButtons) do
+        local icon = iconChoices[offset + index]
+        button.iconValue = icon
+        button:SetShown(icon ~= nil)
+        if icon then button.icon:SetTexture(icon) end
+    end
+end
+
 local function BuildIconPicker()
     if iconPopup then return end
     iconPopup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
@@ -318,55 +332,59 @@ local function BuildIconPicker()
     local close = Button(iconPopup, "Close", 70, 26)
     close:SetPoint("TOPRIGHT", -12, -10)
     close:SetScript("OnClick", function() iconPopup:Hide() end)
-    local scroll = CreateFrame("ScrollFrame", nil, iconPopup, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 12, -58); scroll:SetPoint("BOTTOMRIGHT", -31, 12)
-    local child = CreateFrame("Frame", nil, scroll); child:SetSize(394, 1); scroll:SetScrollChild(child)
-    iconPopup.scroll, iconPopup.child = scroll, child
+    local grid = CreateFrame("Frame", nil, iconPopup)
+    grid:SetPoint("TOPLEFT", 12, -58); grid:SetSize(394, ICON_VISIBLE_ROWS * 39)
+    for index = 1, ICON_COLUMNS * ICON_VISIBLE_ROWS do
+        local button = CreateFrame("Button", nil, grid, "BackdropTemplate")
+        button:SetSize(36, 36); RegisterBackdrop(button, "panelAlt")
+        button.icon = button:CreateTexture(nil, "ARTWORK"); button.icon:SetPoint("TOPLEFT", 4, -4); button.icon:SetPoint("BOTTOMRIGHT", -4, 4); button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        local column = (index - 1) % ICON_COLUMNS; local row = math.floor((index - 1) / ICON_COLUMNS)
+        button:SetPoint("TOPLEFT", 2 + column * 39, -2 - row * 39)
+        button:SetScript("OnClick", function(self)
+            if not self.iconValue then return end
+            selectedIcon = self.iconValue; iconPreview:SetTexture(self.iconValue); iconPopup:Hide(); SetStatus("Icon selected. Save the macro to apply it.")
+        end)
+        iconButtons[index] = button
+    end
+    iconScrollBar = CreateFrame("Slider", nil, iconPopup, "UIPanelScrollBarTemplate")
+    iconScrollBar:SetPoint("TOPRIGHT", -9, -63); iconScrollBar:SetPoint("BOTTOMRIGHT", -9, 17)
+    iconScrollBar:SetValueStep(1); iconScrollBar:SetObeyStepOnDrag(true)
+    iconScrollBar:SetScript("OnValueChanged", UpdateVisibleIcons)
+    iconPopup:EnableMouseWheel(true)
+    iconPopup:SetScript("OnMouseWheel", function(_, delta)
+        iconScrollBar:SetValue((iconScrollBar:GetValue() or 0) - delta * 3)
+    end)
 end
 
 local function RefreshIconPicker()
     BuildIconPicker()
-    local choices, seen = {}, {}
-    local function append(source)
-        if type(source) ~= "table" then return end
-        for _, value in pairs(source) do
-            if type(value) == "table" then value = value.fileID or value.icon or value.texture end
-            if value and not seen[value] then choices[#choices + 1] = value; seen[value] = true end
+    if #iconChoices == 0 then
+        local choices, seen = {}, {}
+        local function append(source)
+            if type(source) ~= "table" then return end
+            for _, value in pairs(source) do
+                if type(value) == "table" then value = value.fileID or value.icon or value.texture end
+                if value and not seen[value] then choices[#choices + 1] = value; seen[value] = true end
+            end
         end
-    end
-    local macroIcons, itemIcons = {}, {}
-    if GetMacroIcons then GetMacroIcons(macroIcons) end
-    if GetMacroItemIcons then GetMacroItemIcons(itemIcons) end
-    append(macroIcons); append(itemIcons)
-    append(GetLooseMacroIcons and GetLooseMacroIcons())
-    append(GetLooseMacroItemIcons and GetLooseMacroItemIcons())
-    if #choices == 0 then
-        choices = {
-            "Interface\\Icons\\INV_Misc_QuestionMark", "Interface\\Icons\\INV_Misc_Note_01",
-            "Interface\\Icons\\Spell_Shadow_Shadowfury", "Interface\\Icons\\Ability_Evoker_Rescue",
-        }
-    end
-    iconChoices = choices
-    local columns = 10
-    for index, icon in ipairs(iconChoices) do
-        local button = iconButtons[index]
-        if not button then
-            button = CreateFrame("Button", nil, iconPopup.child, "BackdropTemplate")
-            button:SetSize(36, 36); RegisterBackdrop(button, "panelAlt")
-            button.icon = button:CreateTexture(nil, "ARTWORK"); button.icon:SetPoint("TOPLEFT", 4, -4); button.icon:SetPoint("BOTTOMRIGHT", -4, 4); button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-            local column = (index - 1) % columns; local row = math.floor((index - 1) / columns)
-            button:SetPoint("TOPLEFT", 2 + column * 39, -2 - row * 39)
-            iconButtons[index] = button
+        local macroIcons, itemIcons = {}, {}
+        if GetMacroIcons then GetMacroIcons(macroIcons) end
+        if GetMacroItemIcons then GetMacroItemIcons(itemIcons) end
+        append(macroIcons); append(itemIcons)
+        append(GetLooseMacroIcons and GetLooseMacroIcons())
+        append(GetLooseMacroItemIcons and GetLooseMacroItemIcons())
+        if #choices == 0 then
+            choices = {
+                "Interface\\Icons\\INV_Misc_QuestionMark", "Interface\\Icons\\INV_Misc_Note_01",
+                "Interface\\Icons\\Spell_Shadow_Shadowfury", "Interface\\Icons\\Ability_Evoker_Rescue",
+            }
         end
-        button.icon:SetTexture(icon)
-        button:SetScript("OnClick", function()
-            selectedIcon = icon; iconPreview:SetTexture(icon); iconPopup:Hide(); SetStatus("Icon selected. Save the macro to apply it.")
-        end)
-        button:Show()
+        iconChoices = choices
     end
-    for index = #iconChoices + 1, #iconButtons do iconButtons[index]:Hide() end
-    iconPopup.child:SetHeight(math.max(1, math.ceil(#iconChoices / columns) * 39 + 4))
-    iconPopup.scroll:SetVerticalScroll(0)
+    local totalRows = math.ceil(#iconChoices / ICON_COLUMNS)
+    local maximum = math.max(0, totalRows - ICON_VISIBLE_ROWS)
+    iconScrollBar:SetMinMaxValues(0, maximum); iconScrollBar:SetValue(0); iconScrollBar:SetShown(maximum > 0)
+    UpdateVisibleIcons()
 end
 
 local function ShowIconPicker()
