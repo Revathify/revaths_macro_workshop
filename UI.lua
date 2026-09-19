@@ -324,6 +324,29 @@ function ns:Initialize()
     BuildUI()
 end
 
+function ns:RedirectBlizzardMacroFrame()
+    if self.macroRedirectInstalled then return end
+    self.macroRedirectInstalled = true
+
+    local function Redirect()
+        if self.redirectingMacroFrame then return end
+        self.redirectingMacroFrame = true
+        if MacroFrame then MacroFrame:Hide() end
+        if frame and not frame:IsShown() then
+            ApplyFont()
+            ApplyBodyFont()
+            RefreshRows()
+            frame:Show()
+        end
+        self.redirectingMacroFrame = nil
+    end
+
+    if MacroFrame then MacroFrame:HookScript("OnShow", Redirect) end
+    if type(MacroFrame_Show) == "function" then
+        hooksecurefunc("MacroFrame_Show", Redirect)
+    end
+end
+
 function ns:Toggle()
     if not frame then return end
     if frame:IsShown() then
