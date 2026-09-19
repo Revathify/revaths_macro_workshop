@@ -77,7 +77,7 @@ end
 -- Scores are snapshots from the linked threads, not live values.
 local INTERNET_MACROS = {
     {
-        name = "Rescue Mouseover", icon = "Interface\\Icons\\Ability_Evoker_Rescue",
+        name = "Rescue Mouseover", class = "EVOKER", icon = "Interface\\Icons\\Ability_Evoker_Rescue",
         body = "#showtooltip Rescue\n/cast [@mouseover,help,nodead][] Rescue",
         detail = "239 upvotes · Evoker", score = 239,
         source = "https://reddit.com/r/wow/comments/102x6y8/",
@@ -136,14 +136,29 @@ local INTERNET_MACROS = {
         detail = "Shadow Priest · Core", score = 70,
         source = "Community template", note = "A compact Devouring Plague button for Shadow Priests.",
     },
+    { name = "Death Grip Focus", class = "DEATHKNIGHT", icon = "Interface\\Icons\\Spell_DeathKnight_Strangulate", body = "#showtooltip Death Grip\n/cast [@focus,harm,nodead][] Death Grip", detail = "Death Knight · Focus control", score = 85, source = "Community template", note = "Grips your hostile focus, otherwise your current target." },
+    { name = "Sigil at Cursor", class = "DEMONHUNTER", icon = "Interface\\Icons\\Ability_DemonHunter_SigilOfFlame", body = "#showtooltip Sigil of Flame\n/cast [@cursor] Sigil of Flame", detail = "Demon Hunter · Fast ground cast", score = 85, source = "Community template", note = "Places Sigil of Flame at the cursor without the targeting circle." },
+    { name = "Rebirth Mouseover", class = "DRUID", icon = "Interface\\Icons\\Spell_Nature_Reincarnation", body = "#showtooltip Rebirth\n/cast [@mouseover,help,dead][] Rebirth", detail = "Druid · Battle resurrection", score = 90, source = "Community template", note = "Battle-resurrects a dead friendly mouseover." },
+    { name = "Trap at Cursor", class = "HUNTER", icon = "Interface\\Icons\\Spell_Frost_ChainsOfIce", body = "#showtooltip Freezing Trap\n/cast [@cursor] Freezing Trap", detail = "Hunter · Fast trap", score = 92, source = "Community template", note = "Drops Freezing Trap instantly at the cursor." },
+    { name = "Counterspell Focus", class = "MAGE", icon = "Interface\\Icons\\Spell_Frost_IceShock", body = "#showtooltip Counterspell\n/cast [@focus,harm,nodead][] Counterspell", detail = "Mage · Focus interrupt", score = 90, source = "Community template", note = "Interrupts your hostile focus, otherwise your current target." },
+    { name = "Tiger's Lust Mouseover", class = "MONK", icon = "Interface\\Icons\\Ability_Monk_TigersLust", body = "#showtooltip Tiger's Lust\n/cast [@mouseover,help,nodead][] Tiger's Lust", detail = "Monk · Utility", score = 84, source = "Community template", note = "Casts Tiger's Lust on a friendly mouseover." },
+    { name = "Freedom Mouseover", class = "PALADIN", icon = "Interface\\Icons\\Spell_Holy_SealOfValor", body = "#showtooltip Blessing of Freedom\n/cast [@mouseover,help,nodead][] Blessing of Freedom", detail = "Paladin · Utility", score = 92, source = "Community template", note = "Casts Blessing of Freedom on a friendly mouseover." },
+    { name = "Tricks Mouseover", class = "ROGUE", icon = "Interface\\Icons\\Ability_Rogue_TricksOftheTrade", body = "#showtooltip Tricks of the Trade\n/cast [@mouseover,help,nodead][] Tricks of the Trade", detail = "Rogue · Threat utility", score = 84, source = "Community template", note = "Casts Tricks of the Trade on a friendly mouseover." },
+    { name = "Wind Shear Focus", class = "SHAMAN", icon = "Interface\\Icons\\Spell_Nature_Cyclone", body = "#showtooltip Wind Shear\n/cast [@focus,harm,nodead][] Wind Shear", detail = "Shaman · Focus interrupt", score = 92, source = "Community template", note = "Interrupts your hostile focus, otherwise your target." },
+    { name = "Soulstone Mouseover", class = "WARLOCK", icon = "Interface\\Icons\\Spell_Shadow_SoulGem", body = "#showtooltip Soulstone\n/use [@mouseover,help][] Soulstone", detail = "Warlock · Resurrection", score = 88, source = "Community template", note = "Uses Soulstone on a friendly mouseover or your target." },
+    { name = "Intervene Mouseover", class = "WARRIOR", icon = "Interface\\Icons\\Ability_Warrior_VictoryRush", body = "#showtooltip Intervene\n/cast [@mouseover,help,nodead][] Intervene", detail = "Warrior · Utility", score = 84, source = "Community template", note = "Intervenes to a friendly mouseover." },
 }
 
-local frame, mainArea, settingsPage, listPane, editorPane, rows, statusText
+local CLASS_ORDER = { "DEATHKNIGHT", "DEMONHUNTER", "DRUID", "EVOKER", "HUNTER", "MAGE", "MONK", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR" }
+local CLASS_LABELS = { DEATHKNIGHT = "Death Knight", DEMONHUNTER = "Demon Hunter", DRUID = "Druid", EVOKER = "Evoker", HUNTER = "Hunter", MAGE = "Mage", MONK = "Monk", PALADIN = "Paladin", PRIEST = "Priest", ROGUE = "Rogue", SHAMAN = "Shaman", WARLOCK = "Warlock", WARRIOR = "Warrior" }
+
+local frame, mainArea, settingsPage, listPane, editorPane, rows, statusText, listScroll
 local macroName, macroBody, bodyLabel, iconPreview, sourceBox, sourceLabel, noteText, editorFontValue
+local editorTitle, editorHint, saveButton, deleteButton, classButton, classMenu
 local rowButtons, tabs, styledFrames, styledText, fontObjects = {}, {}, {}, {}, {}
 local selectedRecord, selectedIcon, activeSource = nil, nil, "account"
 local settingsRefreshing = false
-local reopenGameMenuOnHide = false
+local selectedInternetClass
 local pendingScale, scaleDragging, scaleCommitToken
 local iconPopup, iconButtons, iconChoices, iconPage = nil, {}, {}, 1
 local SelectSource
@@ -279,17 +294,18 @@ local function SetEditor(record)
     sourceBox:SetShown(record ~= nil and record.kind == "internet")
     noteText:SetText(record and record.note or "")
     noteText:SetShown(record ~= nil and record.kind == "internet")
+    if deleteButton then deleteButton:SetShown(record ~= nil and record.index ~= nil and record.kind ~= "internet") end
     if record then
         SetStatus(record.kind == "internet" and "Community template loaded. Review placeholders before saving." or "Macro loaded and ready to edit.")
     else
-        SetStatus("Ready for a new macro. Choose where to save it.")
+        SetStatus(activeSource == "account" and "Ready for a new account macro." or "Ready for a new character macro.")
     end
 end
 
 local function BuildIconPicker()
     if iconPopup then return end
     iconPopup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-    iconPopup:SetSize(420, 350)
+    iconPopup:SetSize(455, 430)
     iconPopup:SetFrameStrata("DIALOG")
     iconPopup:SetClampedToScreen(true)
     RegisterBackdrop(iconPopup, "panel")
@@ -298,59 +314,32 @@ local function BuildIconPicker()
     title:SetText("Choose macro icon")
     local hint = Text(iconPopup, 10, "muted")
     hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-    hint:SetText("Blizzard icons and icons supplied by your installed addons")
-    for index = 1, 80 do
-        local button = CreateFrame("Button", nil, iconPopup, "BackdropTemplate")
-        button:SetSize(36, 36)
-        RegisterBackdrop(button, "panelAlt")
-        button.icon = button:CreateTexture(nil, "ARTWORK")
-        button.icon:SetPoint("TOPLEFT", 4, -4)
-        button.icon:SetPoint("BOTTOMRIGHT", -4, 4)
-        button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-        local column = (index - 1) % 10
-        local row = math.floor((index - 1) / 10)
-        button:SetPoint("TOPLEFT", 14 + column * 39, -61 - row * 39)
-        iconButtons[index] = button
-    end
-    local previous = Button(iconPopup, "‹", 28, 25)
-    previous:SetPoint("BOTTOMLEFT", 14, 12)
-    local next = Button(iconPopup, "›", 28, 25)
-    next:SetPoint("BOTTOMRIGHT", -14, 12)
-    local pageLabel = Text(iconPopup, 10, "muted", "CENTER")
-    pageLabel:SetPoint("BOTTOM", 0, 20)
-    pageLabel:SetWidth(140)
-    iconPopup.previous, iconPopup.next, iconPopup.pageLabel = previous, next, pageLabel
-    previous:SetScript("OnClick", function()
-        iconPage = math.max(1, iconPage - 1)
-        RefreshIconPicker()
-    end)
-    next:SetScript("OnClick", function()
-        iconPage = math.min(math.max(1, math.ceil(#iconChoices / 80)), iconPage + 1)
-        RefreshIconPicker()
-    end)
+    hint:SetText("Scroll through all Blizzard and addon-supplied macro icons")
     local close = Button(iconPopup, "Close", 70, 26)
     close:SetPoint("TOPRIGHT", -12, -10)
     close:SetScript("OnClick", function() iconPopup:Hide() end)
-    iconPopup:EnableMouseWheel(true)
-    iconPopup:SetScript("OnMouseWheel", function(_, delta)
-        local pages = math.max(1, math.ceil(#iconChoices / 80))
-        iconPage = math.max(1, math.min(pages, iconPage + (delta > 0 and -1 or 1)))
-        RefreshIconPicker()
-    end)
+    local scroll = CreateFrame("ScrollFrame", nil, iconPopup, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 12, -58); scroll:SetPoint("BOTTOMRIGHT", -31, 12)
+    local child = CreateFrame("Frame", nil, scroll); child:SetSize(394, 1); scroll:SetScrollChild(child)
+    iconPopup.scroll, iconPopup.child = scroll, child
 end
 
 local function RefreshIconPicker()
     BuildIconPicker()
-    local choices = {}
+    local choices, seen = {}, {}
     local function append(source)
         if type(source) ~= "table" then return end
         for _, value in pairs(source) do
             if type(value) == "table" then value = value.fileID or value.icon or value.texture end
-            if value then choices[#choices + 1] = value end
+            if value and not seen[value] then choices[#choices + 1] = value; seen[value] = true end
         end
     end
-    append(GetMacroIcons and GetMacroIcons())
-    append(GetMacroItemIcons and GetMacroItemIcons())
+    local macroIcons, itemIcons = {}, {}
+    if GetMacroIcons then GetMacroIcons(macroIcons) end
+    if GetMacroItemIcons then GetMacroItemIcons(itemIcons) end
+    append(macroIcons); append(itemIcons)
+    append(GetLooseMacroIcons and GetLooseMacroIcons())
+    append(GetLooseMacroItemIcons and GetLooseMacroItemIcons())
     if #choices == 0 then
         choices = {
             "Interface\\Icons\\INV_Misc_QuestionMark", "Interface\\Icons\\INV_Misc_Note_01",
@@ -358,25 +347,26 @@ local function RefreshIconPicker()
         }
     end
     iconChoices = choices
-    local pages = math.max(1, math.ceil(#iconChoices / 80))
-    iconPage = math.max(1, math.min(pages, iconPage))
-    local offset = (iconPage - 1) * 80
-    for index, button in ipairs(iconButtons) do
-        local icon = iconChoices[offset + index]
-        button:SetShown(icon ~= nil)
-        if icon then
-            button.icon:SetTexture(icon)
-            button:SetScript("OnClick", function()
-                selectedIcon = icon
-                iconPreview:SetTexture(icon)
-                iconPopup:Hide()
-                SetStatus("Icon selected. Save the macro to apply it.")
-            end)
+    local columns = 10
+    for index, icon in ipairs(iconChoices) do
+        local button = iconButtons[index]
+        if not button then
+            button = CreateFrame("Button", nil, iconPopup.child, "BackdropTemplate")
+            button:SetSize(36, 36); RegisterBackdrop(button, "panelAlt")
+            button.icon = button:CreateTexture(nil, "ARTWORK"); button.icon:SetPoint("TOPLEFT", 4, -4); button.icon:SetPoint("BOTTOMRIGHT", -4, 4); button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+            local column = (index - 1) % columns; local row = math.floor((index - 1) / columns)
+            button:SetPoint("TOPLEFT", 2 + column * 39, -2 - row * 39)
+            iconButtons[index] = button
         end
+        button.icon:SetTexture(icon)
+        button:SetScript("OnClick", function()
+            selectedIcon = icon; iconPreview:SetTexture(icon); iconPopup:Hide(); SetStatus("Icon selected. Save the macro to apply it.")
+        end)
+        button:Show()
     end
-    iconPopup.previous:SetEnabled(iconPage > 1)
-    iconPopup.next:SetEnabled(iconPage < pages)
-    iconPopup.pageLabel:SetText(string.format("Page %d / %d · %d icons", iconPage, pages, #iconChoices))
+    for index = #iconChoices + 1, #iconButtons do iconButtons[index]:Hide() end
+    iconPopup.child:SetHeight(math.max(1, math.ceil(#iconChoices / columns) * 39 + 4))
+    iconPopup.scroll:SetVerticalScroll(0)
 end
 
 local function ShowIconPicker()
@@ -415,12 +405,15 @@ local function RecordsForSource()
     if activeSource == "character" then return CharacterRecords() end
     local result = {}
     local playerClass = UnitClass and select(2, UnitClass("player")) or nil
+    selectedInternetClass = selectedInternetClass or playerClass or "PRIEST"
     for _, item in ipairs(INTERNET_MACROS) do
-        local copy = {}
-        for key, value in pairs(item) do copy[key] = value end
-        copy.kind = "internet"
-        copy.classRank = copy.class == playerClass and 2 or (copy.class == nil and 1 or 0)
-        result[#result + 1] = copy
+        if item.class == nil or item.class == selectedInternetClass then
+            local copy = {}
+            for key, value in pairs(item) do copy[key] = value end
+            copy.kind = "internet"
+            copy.classRank = copy.class == selectedInternetClass and 2 or 1
+            result[#result + 1] = copy
+        end
     end
     table.sort(result, function(a, b)
         if a.classRank ~= b.classRank then return a.classRank > b.classRank end
@@ -464,7 +457,8 @@ local function RefreshRows()
     if #records == 0 then SetStatus("No macros in this tab yet. Create one in the editor.") end
 end
 
-local function SaveMacro(isCharacter)
+local function SaveMacro()
+    local isCharacter = activeSource ~= "account"
     local name = string.gsub(macroName:GetText() or "", "^%s*(.-)%s*$", "%1")
     local body = macroBody:GetText() or ""
     if name == "" then SetStatus("Enter a macro name first.", true); return end
@@ -482,20 +476,40 @@ local function SaveMacro(isCharacter)
     if sameScope then ok, result = pcall(EditMacro, selectedRecord.index, name, icon, body)
     else ok, result = pcall(CreateMacro, name, icon, body, isCharacter) end
     if ok and result ~= false and result ~= nil then
-        SetStatus(sameScope and "Macro updated." or (isCharacter and "Character macro created." or "Account macro created."))
-        activeSource = isCharacter and "character" or "account"
+        local message = sameScope and "Macro updated." or (isCharacter and "Character macro created." or "Account macro created.")
         SelectSource(isCharacter and "character" or "account")
+        SetStatus(message)
     else
         SetStatus("The game refused this change. Check macro limits and try outside combat.", true)
     end
 end
 
+local function DeleteSelectedMacro()
+    if not selectedRecord or not selectedRecord.index or selectedRecord.kind == "internet" then return end
+    if InCombatLockdown and InCombatLockdown() then SetStatus("Macros cannot be deleted during combat.", true); return end
+    StaticPopup_Show("REVATHS_MACRO_DELETE", selectedRecord.name, nil, selectedRecord)
+end
+
 SelectSource = function(source)
+    local changed = activeSource ~= source
     activeSource = source; settingsPage:Hide(); mainArea:Show()
+    if classMenu then classMenu:Hide() end
     for key, tab in pairs(tabs) do
         tab.selected = key == source
         tab:SetBackdropColor(Color(tab.selected and "accent" or "panelAlt"))
         tab:SetBackdropBorderColor(Color(tab.selected and "accent" or "border"))
+    end
+    if editorTitle then
+        if source == "account" then
+            editorTitle:SetText("Account Macro Editor"); editorHint:SetText("Create and edit account-wide macros."); saveButton.label:SetText("Save Account Macro")
+        elseif source == "character" then
+            editorTitle:SetText("Character Macro Editor"); editorHint:SetText("Create and edit macros for this character."); saveButton.label:SetText("Save Character Macro")
+        else
+            editorTitle:SetText("Community Macro Editor"); editorHint:SetText("Review a class template before saving it to this character."); saveButton.label:SetText("Save to Character")
+        end
+        classButton:SetShown(source == "internet")
+        listScroll:ClearAllPoints(); listScroll:SetPoint("TOPLEFT", 12, source == "internet" and -86 or -48); listScroll:SetPoint("BOTTOMRIGHT", -28, 12)
+        if changed then SetEditor(nil) end
     end
     RefreshRows()
 end
@@ -613,12 +627,27 @@ local function BuildUI()
     listPane = CreateFrame("Frame", nil, mainArea, "BackdropTemplate"); listPane:SetPoint("TOPLEFT"); listPane:SetPoint("BOTTOMLEFT"); listPane:SetWidth(270); RegisterBackdrop(listPane, "panel")
     local listTitle = Text(listPane, 14, "text"); listTitle:SetPoint("TOPLEFT", 16, -16); listTitle:SetText("MACROS")
     listPane.count = Text(listPane, 10, "muted", "RIGHT"); listPane.count:SetPoint("TOPRIGHT", -16, -19); listPane.count:SetWidth(120)
-    local scroll = CreateFrame("ScrollFrame", nil, listPane, "UIPanelScrollFrameTemplate"); scroll:SetPoint("TOPLEFT", 12, -48); scroll:SetPoint("BOTTOMRIGHT", -28, 12)
-    rows = CreateFrame("Frame", nil, scroll); rows:SetSize(228, 1); scroll:SetScrollChild(rows)
+    local _, playerClass = UnitClass("player"); selectedInternetClass = playerClass or "PRIEST"
+    classButton = Button(listPane, "", 228, 29); classButton:SetPoint("TOPLEFT", 12, -48); classButton.label:SetText("Class: " .. (CLASS_LABELS[selectedInternetClass] or selectedInternetClass)); classButton:Hide()
+    classMenu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate"); classMenu:SetSize(360, 260); classMenu:SetFrameStrata("DIALOG"); classMenu:SetClampedToScreen(true); RegisterBackdrop(classMenu, "panel"); classMenu:Hide()
+    local classTitle = Text(classMenu, 11, "muted"); classTitle:SetPoint("TOPLEFT", 12, -10); classTitle:SetText("SELECT CLASS")
+    for index, classKey in ipairs(CLASS_ORDER) do
+        local choice = Button(classMenu, CLASS_LABELS[classKey], 162, 27)
+        local column = (index - 1) % 2; local row = math.floor((index - 1) / 2)
+        choice:SetPoint("TOPLEFT", 12 + column * 174, -32 - row * 31)
+        choice:SetScript("OnClick", function()
+            selectedInternetClass = classKey; classButton.label:SetText("Class: " .. CLASS_LABELS[classKey]); classMenu:Hide(); SetEditor(nil); RefreshRows()
+        end)
+    end
+    classButton:SetScript("OnClick", function()
+        classMenu:ClearAllPoints(); classMenu:SetPoint("TOPLEFT", classButton, "BOTTOMLEFT", 0, -4); classMenu:SetShown(not classMenu:IsShown())
+    end)
+    listScroll = CreateFrame("ScrollFrame", nil, listPane, "UIPanelScrollFrameTemplate"); listScroll:SetPoint("TOPLEFT", 12, -48); listScroll:SetPoint("BOTTOMRIGHT", -28, 12)
+    rows = CreateFrame("Frame", nil, listScroll); rows:SetSize(228, 1); listScroll:SetScrollChild(rows)
 
     editorPane = CreateFrame("Frame", nil, mainArea, "BackdropTemplate"); editorPane:SetPoint("TOPLEFT", listPane, "TOPRIGHT", 14, 0); editorPane:SetPoint("BOTTOMRIGHT"); RegisterBackdrop(editorPane, "panel")
-    local editorTitle = Text(editorPane, 18, "text"); editorTitle:SetPoint("TOPLEFT", 20, -18); editorTitle:SetText("Macro Editor")
-    local editorHint = Text(editorPane, 11, "muted"); editorHint:SetPoint("TOPLEFT", editorTitle, "BOTTOMLEFT", 0, -6); editorHint:SetText("Edit a macro or adapt a community template.")
+    editorTitle = Text(editorPane, 18, "text"); editorTitle:SetPoint("TOPLEFT", 20, -18); editorTitle:SetText("Account Macro Editor")
+    editorHint = Text(editorPane, 11, "muted"); editorHint:SetPoint("TOPLEFT", editorTitle, "BOTTOMLEFT", 0, -6); editorHint:SetText("Create and edit account-wide macros.")
     iconPreview = editorPane:CreateTexture(nil, "ARTWORK"); iconPreview:SetSize(42, 42); iconPreview:SetPoint("TOPRIGHT", -20, -18); iconPreview:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     local iconButton = Button(editorPane, "Change icon", 96, 25)
     iconButton:SetPoint("TOPRIGHT", -20, -66)
@@ -635,20 +664,33 @@ local function BuildUI()
     local suggestionTitle = Text(suggestionPopup, 10, "muted"); suggestionTitle:SetPoint("TOPLEFT", 10, -8); suggestionTitle:SetText("MACRO COMMANDS")
     local macroCommands = { "/cast ", "/use ", "/target ", "/focus ", "/assist ", "/mouseover ", "/stopcasting", "/cancelaura ", "/startattack", "/dismount", "/run ", "/click " }
     local suggestionButtons = {}
+    local firstSuggestion
     for index = 1, 8 do
         local button = Button(suggestionPopup, "", 218, 18); button:SetPoint("TOPLEFT", 10, -24 - (index - 1) * 20); suggestionButtons[index] = button
     end
+    local function AcceptSuggestion(command)
+        if not command then return end
+        local text = macroBody:GetText() or ""; local line = text:match("([^\n]*)$") or ""; local prefix = text:sub(1, #text - #line)
+        macroBody:SetText(prefix .. command); macroBody:SetCursorPosition(#prefix + #command); suggestionPopup:Hide(); firstSuggestion = nil
+    end
     local function UpdateSuggestions()
-        local text = macroBody:GetText() or ""; local line = text:match("([^\n]*)$") or ""; local partial = line:match("^%s*(/[%w]*)")
-        if not partial or #partial < 1 then suggestionPopup:Hide(); return end
-        local matches = {}; for _, command in ipairs(macroCommands) do if command:sub(1, #partial):lower() == partial:lower() then matches[#matches + 1] = command end end
+        local text = macroBody:GetText() or ""; local line = text:match("([^\n]*)$") or ""; local partial = line:match("^%s*(/[%w]*)$")
+        firstSuggestion = nil
+        if not partial or #partial < 2 then suggestionPopup:Hide(); return end
+        local matches = {}
+        for _, command in ipairs(macroCommands) do
+            local commandWord = command:match("^(%S+)") or command
+            if commandWord:lower() == partial:lower() then suggestionPopup:Hide(); return end
+            if commandWord:sub(1, #partial):lower() == partial:lower() then matches[#matches + 1] = command end
+        end
         if #matches == 0 then suggestionPopup:Hide(); return end
+        firstSuggestion = matches[1]
         suggestionPopup:ClearAllPoints(); suggestionPopup:SetPoint("TOPLEFT", macroBody, "TOPLEFT", 12, -6); suggestionPopup:Show()
         for index, button in ipairs(suggestionButtons) do
             local command = matches[index]; button:SetShown(command ~= nil)
             if command then
                 button.label:SetText(command); button:SetScript("OnClick", function()
-                    local prefix = text:sub(1, #text - #line); macroBody:SetText(prefix .. command); macroBody:SetCursorPosition(#prefix + #command); suggestionPopup:Hide()
+                    AcceptSuggestion(command)
                 end)
             end
         end
@@ -657,6 +699,7 @@ local function BuildUI()
         bodyLabel:SetText(string.format("MACRO BODY  %d / 255", string.len(self:GetText() or "")))
         if userInput then UpdateSuggestions() end
     end)
+    macroBody:SetScript("OnTabPressed", function() if firstSuggestion then AcceptSuggestion(firstSuggestion) end end)
     macroName:SetScript("OnEscapePressed", function() macroName:ClearFocus() end)
     macroBody:SetScript("OnEscapePressed", function() macroBody:ClearFocus() end)
     sourceLabel = Text(editorPane, 10, "muted"); sourceLabel:SetPoint("BOTTOMLEFT", 20, 104); sourceLabel:SetText("SOURCE")
@@ -666,36 +709,28 @@ local function BuildUI()
     sourceBox:SetScript("OnTextChanged", function(self, userInput) if userInput and selectedRecord then self:SetText(selectedRecord.source or ""); self:HighlightText() end end)
     noteText = Text(editorPane, 10, "muted"); noteText:SetPoint("BOTTOMLEFT", 20, 78); noteText:SetPoint("RIGHT", -20, 0); noteText:SetWordWrap(true)
     local newButton = Button(editorPane, "New", 76, 31); newButton:SetPoint("BOTTOMLEFT", 20, 18); newButton:SetScript("OnClick", ClearEditor)
-    local accountSave = Button(editorPane, "Save to Account", 135, 31); accountSave:SetPoint("BOTTOMRIGHT", -162, 18); accountSave:SetScript("OnClick", function() SaveMacro(false) end)
-    local characterSave = Button(editorPane, "Save to Character", 142, 31); characterSave:SetPoint("BOTTOMRIGHT", -12, 18); characterSave:SetScript("OnClick", function() SaveMacro(true) end)
-    statusText = Text(editorPane, 10, "muted"); statusText:SetPoint("BOTTOMLEFT", newButton, "BOTTOMRIGHT", 12, 10); statusText:SetPoint("RIGHT", accountSave, "LEFT", -10, 0); statusText:SetWordWrap(false)
+    saveButton = Button(editorPane, "Save Account Macro", 160, 31); saveButton:SetPoint("BOTTOMRIGHT", -12, 18); saveButton:SetScript("OnClick", SaveMacro)
+    deleteButton = Button(editorPane, "Delete", 82, 31); deleteButton:SetPoint("RIGHT", saveButton, "LEFT", -8, 0); deleteButton:SetScript("OnClick", DeleteSelectedMacro); deleteButton:Hide()
+    statusText = Text(editorPane, 10, "muted"); statusText:SetPoint("BOTTOMLEFT", newButton, "BOTTOMRIGHT", 12, 10); statusText:SetPoint("RIGHT", deleteButton, "LEFT", -10, 0); statusText:SetWordWrap(false)
+
+    StaticPopupDialogs["REVATHS_MACRO_DELETE"] = {
+        text = "Delete macro '%s'?", button1 = DELETE, button2 = CANCEL,
+        OnAccept = function(_, record)
+            local ok = record and record.index and pcall(DeleteMacro, record.index)
+            if ok then SetEditor(nil); RefreshRows(); SetStatus("Macro deleted.") else SetStatus("The game refused to delete this macro.", true) end
+        end,
+        timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+    }
 
     local resize = CreateFrame("Button", nil, frame)
-    resize:SetSize(20, 20); resize:SetPoint("BOTTOMRIGHT", -2, 2); resize:SetFrameLevel(frame:GetFrameLevel() + 3)
-    resize.label = resize:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    resize.label:SetPoint("CENTER", 1, -1); resize.label:SetFont(STANDARD_TEXT_FONT, 16, "OUTLINE"); resize.label:SetTextColor(Color("accent")); resize.label:SetText("◢")
-    resize:SetScript("OnEnter", function(self) self.label:SetTextColor(Color("accent2")); GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Resize window"); GameTooltip:Show() end)
-    resize:SetScript("OnLeave", function(self) self.label:SetTextColor(Color("accent")); GameTooltip:Hide() end)
+    resize:SetSize(24, 24); resize:SetPoint("BOTTOMRIGHT", -1, 1); resize:SetFrameLevel(frame:GetFrameLevel() + 3)
+    resize:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    resize:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    resize:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    resize:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:SetText("Resize window"); GameTooltip:Show() end)
+    resize:SetScript("OnLeave", function() GameTooltip:Hide() end)
     resize:SetScript("OnMouseDown", function() frame:StartSizing("BOTTOMRIGHT") end)
     resize:SetScript("OnMouseUp", function() frame:StopMovingOrSizing(); ns.db.window.width, ns.db.window.height = frame:GetWidth(), frame:GetHeight() end)
-    frame:SetScript("OnHide", function()
-        if not reopenGameMenuOnHide then return end
-        reopenGameMenuOnHide = false
-        if C_Timer and C_Timer.After then
-            C_Timer.After(0, function()
-                if frame:IsShown() then return end
-                if GameMenuFrame_Show then GameMenuFrame_Show()
-                elseif GameMenuFrame and ShowUIPanel then ShowUIPanel(GameMenuFrame)
-                elseif ToggleGameMenu then ToggleGameMenu() end
-            end)
-        elseif GameMenuFrame_Show then
-            GameMenuFrame_Show()
-        elseif GameMenuFrame and ShowUIPanel then
-            ShowUIPanel(GameMenuFrame)
-        elseif ToggleGameMenu then
-            ToggleGameMenu()
-        end
-    end)
     BuildSettings(); table.insert(UISpecialFrames, frame:GetName()); ApplyAppearance(); SetEditor(nil); SelectSource("account"); frame:Hide()
 end
 
@@ -707,10 +742,11 @@ function ns:RedirectBlizzardMacroFrame()
     local function Redirect()
         if self.redirectingMacroFrame then return end
         self.redirectingMacroFrame = true
-        if MacroFrame then MacroFrame:Hide() end
+        if MacroFrame then
+            if HideUIPanel then HideUIPanel(MacroFrame) else MacroFrame:Hide() end
+        end
         local function ShowReplacement()
             if frame and not frame:IsShown() then
-                reopenGameMenuOnHide = true
                 ApplyAppearance()
                 SelectSource(activeSource)
                 frame:Show()
@@ -737,10 +773,8 @@ end
 function ns:Toggle()
     if not frame then return end
     if frame:IsShown() then
-        reopenGameMenuOnHide = false
         frame:Hide()
     else
-        reopenGameMenuOnHide = false
         ApplyAppearance(); SelectSource(activeSource); frame:Show()
     end
 end
